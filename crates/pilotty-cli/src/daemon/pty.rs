@@ -34,9 +34,23 @@ impl CursorTracker {
         self.parser.screen_mut().set_size(size.rows, size.cols);
     }
 
-    fn process_output(&mut self, bytes: &[u8]) -> usize {
-        self.parser.process(bytes);
-        self.count_dsr_queries(bytes)
+    fn process_output(&mut self, bytes: &[u8]) -> Vec<(u16, u16)> {
+        let mut positions = Vec::new();
+        let mut segment_start = 0;
+
+        for (idx, &b) in bytes.iter().enumerate() {
+            if self.advance_dsr_state(b) {
+                self.parser.process(&bytes[segment_start..=idx]);
+                positions.push(self.cursor_position_one_indexed());
+                segment_start = idx + 1;
+            }
+        }
+
+        if segment_start < bytes.len() {
+            self.parser.process(&bytes[segment_start..]);
+        }
+
+        positions
     }
 
     fn cursor_position_one_indexed(&self) -> (u16, u16) {
@@ -44,32 +58,30 @@ impl CursorTracker {
         (row.saturating_add(1), col.saturating_add(1))
     }
 
-    fn count_dsr_queries(&mut self, bytes: &[u8]) -> usize {
-        let mut count = 0;
+    fn advance_dsr_state(&mut self, b: u8) -> bool {
+        let mut detected = false;
 
-        for &b in bytes {
-            self.dsr_state = match (self.dsr_state, b) {
-                (DsrParseState::Ground, 0x1b) => DsrParseState::Esc,
-                (DsrParseState::Ground, _) => DsrParseState::Ground,
+        self.dsr_state = match (self.dsr_state, b) {
+            (DsrParseState::Ground, 0x1b) => DsrParseState::Esc,
+            (DsrParseState::Ground, _) => DsrParseState::Ground,
 
-                (DsrParseState::Esc, b'[') => DsrParseState::Csi,
-                (DsrParseState::Esc, 0x1b) => DsrParseState::Esc,
-                (DsrParseState::Esc, _) => DsrParseState::Ground,
+            (DsrParseState::Esc, b'[') => DsrParseState::Csi,
+            (DsrParseState::Esc, 0x1b) => DsrParseState::Esc,
+            (DsrParseState::Esc, _) => DsrParseState::Ground,
 
-                (DsrParseState::Csi, b'6') => DsrParseState::Csi6,
-                (DsrParseState::Csi, 0x1b) => DsrParseState::Esc,
-                (DsrParseState::Csi, _) => DsrParseState::Ground,
+            (DsrParseState::Csi, b'6') => DsrParseState::Csi6,
+            (DsrParseState::Csi, 0x1b) => DsrParseState::Esc,
+            (DsrParseState::Csi, _) => DsrParseState::Ground,
 
-                (DsrParseState::Csi6, b'n') => {
-                    count += 1;
-                    DsrParseState::Ground
-                }
-                (DsrParseState::Csi6, 0x1b) => DsrParseState::Esc,
-                (DsrParseState::Csi6, _) => DsrParseState::Ground,
-            };
-        }
+            (DsrParseState::Csi6, b'n') => {
+                detected = true;
+                DsrParseState::Ground
+            }
+            (DsrParseState::Csi6, 0x1b) => DsrParseState::Esc,
+            (DsrParseState::Csi6, _) => DsrParseState::Ground,
+        };
 
-        count
+        detected
     }
 }
 
@@ -222,7 +234,13 @@ impl AsyncPtyHandle {
         let reader_write_tx = write_tx.clone();
         let reader_tracker = cursor_tracker.clone();
         let reader_thread = std::thread::spawn(move || {
-            Self::reader_loop(reader, read_tx, reader_write_tx, reader_tracker, reader_shutdown);
+            Self::reader_loop(
+                reader,
+                read_tx,
+                reader_write_tx,
+                reader_tracker,
+                reader_shutdown,
+            );
         });
 
         // Spawn writer thread
@@ -340,28 +358,28 @@ impl AsyncPtyHandle {
                     break;
                 }
                 Ok(n) => {
-                    let dsr_queries = match cursor_tracker.lock() {
+                    let dsr_positions = match cursor_tracker.lock() {
                         Ok(mut tracker) => tracker.process_output(&buf[..n]),
                         Err(_) => {
                             warn!("Cursor tracker mutex poisoned; skipping DSR detection");
-                            0
+                            Vec::new()
                         }
                     };
 
-                    if dsr_queries > 0 {
-                        let (row, col) = match cursor_tracker.lock() {
-                            Ok(tracker) => tracker.cursor_position_one_indexed(),
-                            Err(_) => {
-                                warn!("Cursor tracker mutex poisoned; using fallback cursor response");
-                                (1, 1)
-                            }
-                        };
-                        let response = format!("\x1b[{};{}R", row, col).into_bytes();
-
-                        for _ in 0..dsr_queries {
-                            if write_tx.blocking_send(response.clone()).is_err() {
-                                debug!("PTY write channel closed while sending DSR response");
-                                break;
+                    if !dsr_positions.is_empty() {
+                        for (row, col) in dsr_positions {
+                            let response = format!("\x1b[{};{}R", row, col).into_bytes();
+                            match write_tx.try_send(response) {
+                                Ok(()) => {}
+                                Err(mpsc::error::TrySendError::Full(_)) => {
+                                    warn!(
+                                        "PTY write channel full; dropping synthetic DSR response"
+                                    );
+                                }
+                                Err(mpsc::error::TrySendError::Closed(_)) => {
+                                    debug!("PTY write channel closed while sending DSR response");
+                                    break;
+                                }
                             }
                         }
                     }
@@ -452,25 +470,39 @@ impl Drop for AsyncPtyHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use regex::Regex;
     use std::io::Read;
     use std::time::Duration;
 
     #[test]
-    fn test_cursor_tracker_detects_dsr_queries() {
+    fn test_cursor_tracker_collects_cursor_positions_for_dsr_queries() {
         let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
 
-        assert_eq!(tracker.process_output(b"hello"), 0);
-        assert_eq!(tracker.process_output(b"\x1b[6n"), 1);
-        assert_eq!(tracker.process_output(b"x\x1b[6n\x1b[6n"), 2);
+        assert_eq!(tracker.process_output(b"hello"), Vec::<(u16, u16)>::new());
+        assert_eq!(tracker.process_output(b"\x1b[6n"), vec![(1, 6)]);
+        assert_eq!(
+            tracker.process_output(b"x\x1b[6n\x1b[6n"),
+            vec![(1, 7), (1, 7)]
+        );
     }
 
     #[test]
     fn test_cursor_tracker_detects_dsr_across_chunk_boundary() {
         let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
 
-        assert_eq!(tracker.process_output(b"\x1b["), 0);
-        assert_eq!(tracker.process_output(b"6"), 0);
-        assert_eq!(tracker.process_output(b"n"), 1);
+        assert_eq!(tracker.process_output(b"\x1b["), Vec::<(u16, u16)>::new());
+        assert_eq!(tracker.process_output(b"6"), Vec::<(u16, u16)>::new());
+        assert_eq!(tracker.process_output(b"n"), vec![(1, 1)]);
+    }
+
+    #[test]
+    fn test_cursor_tracker_captures_position_at_dsr_boundary_with_trailing_output() {
+        let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
+
+        let positions = tracker.process_output(b"abc\x1b[6nxyz");
+
+        assert_eq!(positions, vec![(1, 4)]);
+        assert_eq!(tracker.cursor_position_one_indexed(), (1, 7));
     }
 
     #[test]
@@ -647,7 +679,7 @@ mod tests {
             &[
                 "bash".to_string(),
                 "-lc".to_string(),
-                "printf '\\033[6n'; IFS=';' read -r -d R row col; printf 'ok:%s;%s\\n' \"$row\" \"$col\""
+                "printf 'abc\\033[6nxyz'; IFS=';' read -r -d R row col; printf 'ok:%s;%s\\n' \"$row\" \"$col\""
                     .to_string(),
             ],
             TermSize::default(),
@@ -671,10 +703,17 @@ mod tests {
 
         let bytes = result.expect("Timed out waiting for DSR response");
         let output = String::from_utf8_lossy(&bytes);
-        assert!(
-            output.contains("ok:"),
-            "Expected shell to receive DSR response, got: {:?}",
-            output
+        let captures = Regex::new(r"ok:\x1b\[(\d+);(\d+)")
+            .expect("valid regex")
+            .captures(&output)
+            .expect("Expected shell to receive DSR response with cursor coordinates");
+        let row: u16 = captures[1].parse().expect("row should parse");
+        let col: u16 = captures[2].parse().expect("col should parse");
+
+        assert_eq!(
+            (row, col),
+            (1, 4),
+            "Unexpected DSR response in output: {output:?}"
         );
 
         handle.shutdown().await;
