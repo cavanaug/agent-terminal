@@ -8,6 +8,71 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use tokio::sync::mpsc;
 use tracing::{debug, error, warn};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DsrParseState {
+    Ground,
+    Esc,
+    Csi,
+    Csi6,
+}
+
+/// Tracks terminal cursor position and detects DSR cursor-position requests.
+struct CursorTracker {
+    parser: vt100::Parser,
+    dsr_state: DsrParseState,
+}
+
+impl CursorTracker {
+    fn new(size: TermSize) -> Self {
+        Self {
+            parser: vt100::Parser::new(size.rows, size.cols, 0),
+            dsr_state: DsrParseState::Ground,
+        }
+    }
+
+    fn resize(&mut self, size: TermSize) {
+        self.parser.screen_mut().set_size(size.rows, size.cols);
+    }
+
+    fn process_output(&mut self, bytes: &[u8]) -> usize {
+        self.parser.process(bytes);
+        self.count_dsr_queries(bytes)
+    }
+
+    fn cursor_position_one_indexed(&self) -> (u16, u16) {
+        let (row, col) = self.parser.screen().cursor_position();
+        (row.saturating_add(1), col.saturating_add(1))
+    }
+
+    fn count_dsr_queries(&mut self, bytes: &[u8]) -> usize {
+        let mut count = 0;
+
+        for &b in bytes {
+            self.dsr_state = match (self.dsr_state, b) {
+                (DsrParseState::Ground, 0x1b) => DsrParseState::Esc,
+                (DsrParseState::Ground, _) => DsrParseState::Ground,
+
+                (DsrParseState::Esc, b'[') => DsrParseState::Csi,
+                (DsrParseState::Esc, 0x1b) => DsrParseState::Esc,
+                (DsrParseState::Esc, _) => DsrParseState::Ground,
+
+                (DsrParseState::Csi, b'6') => DsrParseState::Csi6,
+                (DsrParseState::Csi, 0x1b) => DsrParseState::Esc,
+                (DsrParseState::Csi, _) => DsrParseState::Ground,
+
+                (DsrParseState::Csi6, b'n') => {
+                    count += 1;
+                    DsrParseState::Ground
+                }
+                (DsrParseState::Csi6, 0x1b) => DsrParseState::Esc,
+                (DsrParseState::Csi6, _) => DsrParseState::Ground,
+            };
+        }
+
+        count
+    }
+}
+
 /// Terminal size in columns and rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TermSize {
@@ -130,6 +195,8 @@ pub struct AsyncPtyHandle {
     reader_thread: Option<std::thread::JoinHandle<()>>,
     /// Handle to the writer thread for cleanup.
     writer_thread: Option<std::thread::JoinHandle<()>>,
+    /// Tracks cursor position from PTY output for DSR responses.
+    cursor_tracker: Arc<std::sync::Mutex<CursorTracker>>,
 }
 
 impl AsyncPtyHandle {
@@ -148,10 +215,14 @@ impl AsyncPtyHandle {
         let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>(64);
         let (read_tx, read_rx) = mpsc::channel::<Vec<u8>>(64);
 
+        let cursor_tracker = Arc::new(std::sync::Mutex::new(CursorTracker::new(initial_size)));
+
         // Spawn reader thread
         let reader_shutdown = shutdown.clone();
+        let reader_write_tx = write_tx.clone();
+        let reader_tracker = cursor_tracker.clone();
         let reader_thread = std::thread::spawn(move || {
-            Self::reader_loop(reader, read_tx, reader_shutdown);
+            Self::reader_loop(reader, read_tx, reader_write_tx, reader_tracker, reader_shutdown);
         });
 
         // Spawn writer thread
@@ -168,6 +239,7 @@ impl AsyncPtyHandle {
             size: std::sync::Mutex::new(initial_size),
             reader_thread: Some(reader_thread),
             writer_thread: Some(writer_thread),
+            cursor_tracker,
         })
     }
 
@@ -185,6 +257,11 @@ impl AsyncPtyHandle {
             .size
             .lock()
             .map_err(|_| anyhow::anyhow!("Size mutex poisoned"))? = size;
+
+        self.cursor_tracker
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Cursor tracker mutex poisoned"))?
+            .resize(size);
         Ok(())
     }
     /// Send bytes to the PTY stdin.
@@ -245,6 +322,8 @@ impl AsyncPtyHandle {
     fn reader_loop(
         mut reader: Box<dyn Read + Send>,
         read_tx: mpsc::Sender<Vec<u8>>,
+        write_tx: mpsc::Sender<Vec<u8>>,
+        cursor_tracker: Arc<std::sync::Mutex<CursorTracker>>,
         shutdown: Arc<std::sync::atomic::AtomicBool>,
     ) {
         let mut buf = vec![0u8; READ_BUFFER_SIZE];
@@ -261,6 +340,32 @@ impl AsyncPtyHandle {
                     break;
                 }
                 Ok(n) => {
+                    let dsr_queries = match cursor_tracker.lock() {
+                        Ok(mut tracker) => tracker.process_output(&buf[..n]),
+                        Err(_) => {
+                            warn!("Cursor tracker mutex poisoned; skipping DSR detection");
+                            0
+                        }
+                    };
+
+                    if dsr_queries > 0 {
+                        let (row, col) = match cursor_tracker.lock() {
+                            Ok(tracker) => tracker.cursor_position_one_indexed(),
+                            Err(_) => {
+                                warn!("Cursor tracker mutex poisoned; using fallback cursor response");
+                                (1, 1)
+                            }
+                        };
+                        let response = format!("\x1b[{};{}R", row, col).into_bytes();
+
+                        for _ in 0..dsr_queries {
+                            if write_tx.blocking_send(response.clone()).is_err() {
+                                debug!("PTY write channel closed while sending DSR response");
+                                break;
+                            }
+                        }
+                    }
+
                     // Use blocking send since we're in a thread
                     if read_tx.blocking_send(buf[..n].to_vec()).is_err() {
                         debug!("PTY read channel closed");
@@ -349,6 +454,33 @@ mod tests {
     use super::*;
     use std::io::Read;
     use std::time::Duration;
+
+    #[test]
+    fn test_cursor_tracker_detects_dsr_queries() {
+        let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
+
+        assert_eq!(tracker.process_output(b"hello"), 0);
+        assert_eq!(tracker.process_output(b"\x1b[6n"), 1);
+        assert_eq!(tracker.process_output(b"x\x1b[6n\x1b[6n"), 2);
+    }
+
+    #[test]
+    fn test_cursor_tracker_detects_dsr_across_chunk_boundary() {
+        let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
+
+        assert_eq!(tracker.process_output(b"\x1b["), 0);
+        assert_eq!(tracker.process_output(b"6"), 0);
+        assert_eq!(tracker.process_output(b"n"), 1);
+    }
+
+    #[test]
+    fn test_cursor_tracker_reports_one_indexed_position() {
+        let mut tracker = CursorTracker::new(TermSize { cols: 80, rows: 24 });
+        tracker.process_output(b"abc");
+
+        // Cursor is after 3 chars on first row => 1-indexed (1, 4)
+        assert_eq!(tracker.cursor_position_one_indexed(), (1, 4));
+    }
 
     #[test]
     fn test_spawn_echo_and_read_output() {
@@ -507,6 +639,45 @@ mod tests {
         handle
             .resize(TermSize { cols: 40, rows: 10 })
             .expect("resize to smaller should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_async_pty_responds_to_dsr_cursor_query() {
+        let session = PtySession::spawn(
+            &[
+                "bash".to_string(),
+                "-lc".to_string(),
+                "printf '\\033[6n'; IFS=';' read -r -d R row col; printf 'ok:%s;%s\\n' \"$row\" \"$col\""
+                    .to_string(),
+            ],
+            TermSize::default(),
+            None,
+        )
+        .expect("Failed to spawn bash DSR test");
+
+        let handle = AsyncPtyHandle::new(session).expect("Failed to create async handle");
+
+        let result = tokio::time::timeout(Duration::from_secs(2), async {
+            let mut collected = Vec::new();
+            while let Some(chunk) = handle.read().await {
+                collected.extend_from_slice(&chunk);
+                if String::from_utf8_lossy(&collected).contains("ok:") {
+                    break;
+                }
+            }
+            collected
+        })
+        .await;
+
+        let bytes = result.expect("Timed out waiting for DSR response");
+        let output = String::from_utf8_lossy(&bytes);
+        assert!(
+            output.contains("ok:"),
+            "Expected shell to receive DSR response, got: {:?}",
+            output
+        );
+
+        handle.shutdown().await;
     }
 
     #[test]
