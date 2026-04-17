@@ -597,6 +597,7 @@ mod tests {
                 Some("test-session".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -618,7 +619,7 @@ mod tests {
 
         // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create session");
 
@@ -643,7 +644,7 @@ mod tests {
 
         // Create a few sessions
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create session 1");
 
@@ -653,6 +654,7 @@ mod tests {
                 Some("named".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create session 2");
@@ -675,6 +677,7 @@ mod tests {
                 Some("findme".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -711,7 +714,7 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create session");
 
@@ -730,6 +733,7 @@ mod tests {
                 Some("my-session".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -744,7 +748,7 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create default session");
 
@@ -779,6 +783,7 @@ mod tests {
                 None,
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create default session");
@@ -802,6 +807,7 @@ mod tests {
                 Some("unique-name".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create first session");
@@ -813,6 +819,7 @@ mod tests {
                 Some("unique-name".to_string()),
                 None,
                 None,
+                ColorMode::default(),
             )
             .await;
 
@@ -830,12 +837,12 @@ mod tests {
         let manager = SessionManager::new();
 
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create default session");
 
         let result = manager
-            .create_session(vec!["echo".to_string(), "2".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "2".to_string()], None, None, None, ColorMode::default())
             .await;
 
         assert!(result.is_err());
@@ -858,6 +865,7 @@ mod tests {
                 None,
                 None,
                 None,
+                ColorMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -890,7 +898,7 @@ mod tests {
 
         // Spawn a long-lived process (cat waits for input)
         let _id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create session");
 
@@ -920,7 +928,7 @@ mod tests {
 
         // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, ColorMode::default())
             .await
             .expect("Failed to create session");
 

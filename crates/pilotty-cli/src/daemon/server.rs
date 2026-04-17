@@ -1509,6 +1509,7 @@ mod tests {
                 command: vec!["echo".to_string(), "hello from test".to_string()],
                 session_name: Some("test-snap".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1542,6 +1543,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_color_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1615,6 +1617,7 @@ mod tests {
                 command: vec!["echo".to_string(), "full format test".to_string()],
                 session_name: Some("full-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1642,6 +1645,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_color_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1732,6 +1736,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("type-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1789,6 +1794,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_color_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1850,6 +1856,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("key-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2009,6 +2016,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("click-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2104,6 +2112,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("scroll-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2209,6 +2218,7 @@ mod tests {
                 command: vec!["echo".to_string(), "hello world marker".to_string()],
                 session_name: Some("waitfor-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2300,6 +2310,7 @@ mod tests {
                 command: vec!["echo".to_string(), "version 1.2.3 ready".to_string()],
                 session_name: Some("waitfor-re-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2390,6 +2401,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("waitfor-to-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2478,6 +2490,7 @@ mod tests {
                 command: vec!["echo".to_string(), "test".to_string()],
                 session_name: Some("waitfor-bad-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2567,6 +2580,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("await-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2594,6 +2608,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_color_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -2648,6 +2663,7 @@ mod tests {
                 await_change: Some(baseline_hash),
                 settle_ms: 50,
                 timeout_ms: 5000,
+                requested_color_mode: None,
             },
         };
         let await_json = serde_json::to_string(&await_request).unwrap();
@@ -2725,6 +2741,7 @@ mod tests {
                 command: vec!["pwd".to_string()],
                 session_name: Some("bad-cwd-test".to_string()),
                 cwd: Some("/nonexistent/path/that/does/not/exist".to_string()),
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2801,6 +2818,7 @@ mod tests {
                 ],
                 session_name: Some("elem-test".to_string()),
                 cwd: None,
+                color_mode: ColorMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2829,6 +2847,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_color_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
