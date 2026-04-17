@@ -43,5 +43,5 @@ fi
 
 echo "Error: No binary found for ${OS}-${ARCH}" >&2
 echo "Expected: $BINARY" >&2
-echo "You can build from source: https://github.com/msmps/pilotty" >&2
+echo "You can build from source: https://github.com/cavanaug/pilotty" >&2
 exit 1

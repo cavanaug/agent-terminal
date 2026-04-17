@@ -23,7 +23,7 @@
 ---
 
 > [!NOTE]
-> **Built with AI, for AI.** This project was built with the support of an AI agent, planned thoroughly with a tight feedback loop and reviewed at each step. While we've tested extensively, edge cases may exist. Use in production at your own discretion, and please [report any issues](https://github.com/msmps/pilotty/issues) you find!
+> **Built with AI, for AI.** This project was built with the support of an AI agent, planned thoroughly with a tight feedback loop and reviewed at each step. While we've tested extensively, edge cases may exist. Use in production at your own discretion, and please [report any issues](https://github.com/cavanaug/pilotty/issues) you find!
 
 pilotty enables AI agents to interact with terminal applications through a simple command-line interface. It manages pseudo-terminal (PTY) sessions with full VT100 terminal emulation, captures screen state, and provides keyboard/mouse input for navigating terminal user interfaces. Think of it as headless terminal automation for AI workflows.
 
@@ -55,7 +55,7 @@ npm install -g pilotty
 ### From Source
 
 ```bash
-git clone https://github.com/msmps/pilotty
+git clone https://github.com/cavanaug/pilotty
 cd pilotty
 cargo build --release
 ./target/release/pilotty --help
@@ -477,7 +477,7 @@ All errors include AI-friendly suggestions:
 Add the skill to your AI coding assistant for richer context:
 
 ```bash
-npx skills add msmps/pilotty
+npx skills add cavanaug/pilotty
 ```
 
 This works with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.

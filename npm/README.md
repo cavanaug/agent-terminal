@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/msmps/pilotty/main/assets/pilotty.png" alt="pilotty - Terminal automation CLI enabling AI agents to control TUI applications" width="400">
+  <img src="https://raw.githubusercontent.com/cavanaug/pilotty/main/assets/pilotty.png" alt="pilotty - Terminal automation CLI enabling AI agents to control TUI applications" width="400">
 </p>
 
 <h1 align="center">pilotty</h1>
@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/pilotty"><img alt="npm version" src="https://img.shields.io/npm/v/pilotty"></a>
-  <a href="https://github.com/msmps/pilotty/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="https://github.com/cavanaug/pilotty/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
 ---
@@ -106,7 +106,7 @@ Use the cursor position and text content to understand the screen state and navi
 
 ## Documentation
 
-See the **[GitHub repository](https://github.com/msmps/pilotty)** for full documentation including:
+See the **[GitHub repository](https://github.com/cavanaug/pilotty)** for full documentation including:
 
 - All commands reference
 - Session management
@@ -118,7 +118,7 @@ See the **[GitHub repository](https://github.com/msmps/pilotty)** for full docum
 ## Building from Source
 
 ```bash
-git clone https://github.com/msmps/pilotty
+git clone https://github.com/cavanaug/pilotty
 cd pilotty
 cargo build --release
 ./target/release/pilotty --help

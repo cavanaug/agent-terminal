@@ -15,11 +15,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/msmps/pilotty.git"
+    "url": "https://github.com/cavanaug/pilotty.git"
   },
-  "homepage": "https://github.com/msmps/pilotty",
+  "homepage": "https://github.com/cavanaug/pilotty",
   "bugs": {
-    "url": "https://github.com/msmps/pilotty/issues"
+    "url": "https://github.com/cavanaug/pilotty/issues"
   },
   "bin": {
     "pilotty": "./bin/pilotty"
