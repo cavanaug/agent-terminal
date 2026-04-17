@@ -12,6 +12,8 @@ use tracing::{debug, info};
 use pilotty_core::elements::classify::{detect, ClassifyContext};
 use pilotty_core::elements::Element;
 use pilotty_core::error::ApiError;
+use pilotty_core::elements::segment::Cluster;
+use pilotty_core::format::{build_color_map, build_style_map, segment_grid, RenderMode, ColorMapEntry, StyleMapEntry};
 use pilotty_core::protocol::SessionInfo;
 use pilotty_core::snapshot::compute_content_hash;
 
@@ -64,6 +66,12 @@ pub struct SnapshotData {
     /// Hash of screen content for change detection.
     /// Present when `with_elements=true`.
     pub content_hash: Option<u64>,
+    /// Position-based style attribute map (tier-filtered).
+    pub style_map: Option<Vec<StyleMapEntry>>,
+    /// Position-based color attribute map (tier-filtered).
+    pub color_map: Option<Vec<ColorMapEntry>>,
+    /// Cluster-based segments for ANSI rendering (present when render_mode allows style).
+    pub clusters: Option<Vec<Cluster>>,
 }
 
 /// An active PTY session.
@@ -78,6 +86,8 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     /// Terminal size.
     pub size: TermSize,
+    /// Color mode for this session's snapshots.
+    pub render_mode: RenderMode,
     /// Async handle for PTY I/O.
     pub pty: AsyncPtyHandle,
     /// Terminal emulator tracking screen state.
@@ -218,6 +228,7 @@ impl SessionManager {
         name: Option<String>,
         size: Option<TermSize>,
         cwd: Option<String>,
+        render_mode: RenderMode,
     ) -> Result<SessionId, ApiError> {
         let name = name.or_else(|| Some("default".to_string()));
 
@@ -255,6 +266,7 @@ impl SessionManager {
             command,
             created_at: Utc::now(),
             size,
+            render_mode,
             pty,
             terminal,
         };
@@ -383,10 +395,23 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
+        self.get_snapshot_data_with_render_mode(id, with_elements, None).await
+    }
+
+    /// Get snapshot data with an optional render_mode override.
+    pub async fn get_snapshot_data_with_render_mode(
+        &self,
+        id: &SessionId,
+        with_elements: bool,
+        render_mode_override: Option<RenderMode>,
+    ) -> Result<SnapshotData, ApiError> {
         let sessions = self.sessions.read().await;
         let session = sessions
             .get(id)
             .ok_or_else(|| ApiError::session_not_found(&id.0))?;
+
+        // Determine effective render mode
+        let render_mode = render_mode_override.unwrap_or(session.render_mode);
 
         // Drain pending PTY output to update terminal state
         session.drain_pty_output().await;
@@ -411,6 +436,26 @@ impl SessionManager {
             (None, None)
         };
 
+        // Build style_map and color_map based on render mode
+        let style_map = if render_mode.allows_style() {
+            Some(build_style_map(&*terminal))
+        } else {
+            None
+        };
+
+        let color_map = if render_mode.allows_color() {
+            Some(build_color_map(&*terminal))
+        } else {
+            None
+        };
+
+        // Build clusters for ANSI rendering when style is requested
+        let clusters = if render_mode.allows_style() {
+            Some(segment_grid(&*terminal))
+        } else {
+            None
+        };
+
         Ok(SnapshotData {
             text,
             cursor_pos,
@@ -418,6 +463,9 @@ impl SessionManager {
             size,
             elements,
             content_hash,
+            style_map,
+            color_map,
+            clusters,
         })
     }
 
@@ -560,6 +608,7 @@ mod tests {
                 Some("test-session".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -581,7 +630,7 @@ mod tests {
 
         // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create session");
 
@@ -606,7 +655,7 @@ mod tests {
 
         // Create a few sessions
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create session 1");
 
@@ -616,6 +665,7 @@ mod tests {
                 Some("named".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create session 2");
@@ -638,6 +688,7 @@ mod tests {
                 Some("findme".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -674,7 +725,7 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create session");
 
@@ -693,6 +744,7 @@ mod tests {
                 Some("my-session".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -707,7 +759,7 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create default session");
 
@@ -742,6 +794,7 @@ mod tests {
                 None,
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create default session");
@@ -765,6 +818,7 @@ mod tests {
                 Some("unique-name".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create first session");
@@ -776,6 +830,7 @@ mod tests {
                 Some("unique-name".to_string()),
                 None,
                 None,
+                RenderMode::default(),
             )
             .await;
 
@@ -793,12 +848,12 @@ mod tests {
         let manager = SessionManager::new();
 
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create default session");
 
         let result = manager
-            .create_session(vec!["echo".to_string(), "2".to_string()], None, None, None)
+            .create_session(vec!["echo".to_string(), "2".to_string()], None, None, None, RenderMode::default())
             .await;
 
         assert!(result.is_err());
@@ -821,6 +876,7 @@ mod tests {
                 None,
                 None,
                 None,
+                RenderMode::default(),
             )
             .await
             .expect("Failed to create session");
@@ -853,7 +909,7 @@ mod tests {
 
         // Spawn a long-lived process (cat waits for input)
         let _id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create session");
 
@@ -883,7 +939,7 @@ mod tests {
 
         // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None)
+            .create_session(vec!["cat".to_string()], None, None, None, RenderMode::default())
             .await
             .expect("Failed to create session");
 

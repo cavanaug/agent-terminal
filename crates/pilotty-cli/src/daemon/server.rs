@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use pilotty_core::error::ApiError;
+use pilotty_core::format::{render_ansi_lines, RenderMode};
 use pilotty_core::input::encode_mouse_click_combined;
 use pilotty_core::protocol::{Command, Request, Response, ResponseData, SnapshotFormat};
 use pilotty_core::snapshot::{CursorState, ScreenState, TerminalSize};
@@ -509,7 +510,8 @@ async fn handle_request(
             command,
             session_name,
             cwd,
-        } => handle_spawn(&request.id, &sessions, command, session_name, cwd).await,
+            render_mode,
+        } => handle_spawn(&request.id, &sessions, command, session_name, cwd, render_mode).await,
 
         Command::Snapshot {
             session,
@@ -517,6 +519,7 @@ async fn handle_request(
             await_change,
             settle_ms,
             timeout_ms,
+            requested_render_mode,
         } => {
             handle_snapshot(
                 &request.id,
@@ -526,6 +529,7 @@ async fn handle_request(
                 await_change,
                 settle_ms,
                 timeout_ms,
+                requested_render_mode,
             )
             .await
         }
@@ -576,6 +580,7 @@ async fn handle_spawn(
     command: Vec<String>,
     session_name: Option<String>,
     cwd: Option<String>,
+    render_mode: RenderMode,
 ) -> Response {
     if command.is_empty() {
         return Response::error(
@@ -611,7 +616,7 @@ async fn handle_spawn(
     }
 
     match sessions
-        .create_session(command.clone(), session_name, None, cwd)
+        .create_session(command.clone(), session_name, None, cwd, render_mode)
         .await
     {
         Ok(id) => {
@@ -645,6 +650,7 @@ async fn handle_snapshot(
     await_change: Option<u64>,
     settle_ms: u64,
     timeout_ms: u64,
+    requested_render_mode: Option<RenderMode>,
 ) -> Response {
     use std::time::{Duration, Instant};
 
@@ -750,7 +756,7 @@ async fn handle_snapshot(
     }
 
     // Phase 3: Take final snapshot with requested format
-    let snapshot = match sessions.get_snapshot_data(&session_id, with_elements).await {
+    let snapshot = match sessions.get_snapshot_data_with_render_mode(&session_id, with_elements, requested_render_mode).await {
         Ok(data) => data,
         Err(e) => return Response::error(request_id, e),
     };
@@ -758,8 +764,11 @@ async fn handle_snapshot(
 
     match format {
         SnapshotFormat::Text => {
-            let output =
-                format_text_snapshot(&snapshot.text, cursor_row, cursor_col, snapshot.size);
+            let output = if let Some(ref clusters) = snapshot.clusters {
+                render_ansi_lines(clusters, cursor_row, cursor_col, snapshot.size.rows, snapshot.size.cols, requested_render_mode.unwrap_or_default())
+            } else {
+                format_text_snapshot(&snapshot.text, cursor_row, cursor_col, snapshot.size)
+            };
             Response::success(
                 request_id,
                 ResponseData::Snapshot {
@@ -784,6 +793,8 @@ async fn handle_snapshot(
                 text: Some(snapshot.text),
                 elements: snapshot.elements,
                 content_hash: snapshot.content_hash,
+                style_map: snapshot.style_map,
+                color_map: snapshot.color_map,
             };
             Response::success(request_id, ResponseData::ScreenState(screen_state))
         }
@@ -803,6 +814,8 @@ async fn handle_snapshot(
                 text: None,
                 elements: None,
                 content_hash: None,
+                style_map: None,
+                color_map: None,
             };
             Response::success(request_id, ResponseData::ScreenState(screen_state))
         }
@@ -1499,6 +1512,7 @@ mod tests {
                 command: vec!["echo".to_string(), "hello from test".to_string()],
                 session_name: Some("test-snap".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1532,6 +1546,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_render_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1605,6 +1620,7 @@ mod tests {
                 command: vec!["echo".to_string(), "full format test".to_string()],
                 session_name: Some("full-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1632,6 +1648,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_render_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1722,6 +1739,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("type-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1779,6 +1797,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_render_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1840,6 +1859,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("key-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -1999,6 +2019,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("click-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2094,6 +2115,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("scroll-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2199,6 +2221,7 @@ mod tests {
                 command: vec!["echo".to_string(), "hello world marker".to_string()],
                 session_name: Some("waitfor-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2290,6 +2313,7 @@ mod tests {
                 command: vec!["echo".to_string(), "version 1.2.3 ready".to_string()],
                 session_name: Some("waitfor-re-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2380,6 +2404,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("waitfor-to-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2468,6 +2493,7 @@ mod tests {
                 command: vec!["echo".to_string(), "test".to_string()],
                 session_name: Some("waitfor-bad-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2557,6 +2583,7 @@ mod tests {
                 command: vec!["cat".to_string()],
                 session_name: Some("await-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2584,6 +2611,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_render_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -2638,6 +2666,7 @@ mod tests {
                 await_change: Some(baseline_hash),
                 settle_ms: 50,
                 timeout_ms: 5000,
+                requested_render_mode: None,
             },
         };
         let await_json = serde_json::to_string(&await_request).unwrap();
@@ -2715,6 +2744,7 @@ mod tests {
                 command: vec!["pwd".to_string()],
                 session_name: Some("bad-cwd-test".to_string()),
                 cwd: Some("/nonexistent/path/that/does/not/exist".to_string()),
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2791,6 +2821,7 @@ mod tests {
                 ],
                 session_name: Some("elem-test".to_string()),
                 cwd: None,
+                render_mode: RenderMode::default(),
             },
         };
         let request_json = serde_json::to_string(&spawn_request).unwrap();
@@ -2819,6 +2850,7 @@ mod tests {
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
+                requested_render_mode: None,
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();

@@ -32,3 +32,26 @@ examples/
 # npm - binaries are downloaded during release
 npm/bin/pilotty-*
 npm/node_modules/
+
+# ── GSD baseline (auto-generated) ──
+.gsd
+.gsd-id
+.bg-shell/
+Thumbs.db
+*~
+*.code-workspace
+.env.*
+!.env.example
+node_modules/
+.next/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+vendor/
+*.log
+coverage/
+.cache/
+tmp/

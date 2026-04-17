@@ -31,6 +31,8 @@ pilotty enables AI agents to interact with terminal applications through a simpl
 
 - **PTY (Pseudo-Terminal) Management**: Spawn and manage terminal applications in background sessions
 - **Terminal Emulation**: Full VT100 emulation for accurate screen capture and state tracking
+- **Render Modes**: Three-tier snapshot fidelity — basic (text only), styled (bold/italic/underline), color (full RGB)
+- **ANSI Text Output**: `--format text` with styled/color mode emits SGR escape sequences that recreate the screen appearance
 - **Keyboard Navigation**: Interact with TUIs using Tab, Enter, arrow keys, and key combos
 - **AI-Friendly Output**: Clean JSON responses with actionable suggestions on errors
 - **Multi-Session**: Run multiple terminal apps simultaneously in isolated sessions
@@ -107,6 +109,7 @@ pilotty stop
 pilotty spawn <command>           # Spawn a TUI app (e.g., pilotty spawn vim file.txt)
 pilotty spawn --name myapp <cmd>  # Spawn with a custom session name
 pilotty spawn --cwd /path cmd     # Spawn in a specific working directory
+pilotty spawn --render color cmd  # Spawn with full color capture enabled
 pilotty kill                      # Kill default session
 pilotty kill -s myapp             # Kill specific session
 pilotty list-sessions             # List all active sessions
@@ -121,6 +124,15 @@ pilotty examples                  # Show end-to-end workflow example
 pilotty snapshot                  # Full JSON with text
 pilotty snapshot --format compact # JSON without text field
 pilotty snapshot --format text    # Plain text with cursor indicator
+
+# Render modes control style/color fidelity
+pilotty snapshot --render basic   # Text only (default)
+pilotty snapshot --render styled  # Text attributes (bold, italic, underline, dim, inverse)
+pilotty snapshot --render color   # Full color (text attributes + fg/bg colors)
+
+# ANSI text output — visually recreates the terminal screen
+pilotty snapshot --format text --render color   # ANSI-styled text output
+pilotty snapshot --format text --render styled  # Text attributes only, no colors
 
 # Wait for screen to change before returning (no more manual sleep!)
 pilotty snapshot --await-change $HASH           # Block until hash differs
@@ -185,6 +197,65 @@ The `snapshot` command returns structured data about the terminal screen:
   "content_hash": 12345678901234567890
 }
 ```
+
+### Render Modes
+
+The `--render` flag controls how much visual fidelity is captured in snapshots. Set it at spawn time (applies to all snapshots) or per-snapshot (overrides the session default):
+
+| Mode | `--format full` (JSON) | `--format text` |
+|------|----------------------|-----------------|
+| `basic` (default) | text + elements | Plain text with cursor indicator |
+| `styled` | text + elements + `style_map` | ANSI text with bold/italic/underline |
+| `color` | text + elements + `style_map` + `color_map` | ANSI text with full color |
+
+```bash
+# Set at spawn time
+pilotty spawn --render color -- htop
+
+# Override per-snapshot
+pilotty snapshot --render styled
+```
+
+### Style Map & Color Map
+
+With `--render styled` or `--render color`, the Full JSON snapshot includes position-based style data:
+
+```json
+{
+  "style_map": [
+    { "r": 0, "c": 0, "l": 9, "s": { "b": true } },
+    { "r": 1, "c": 0, "l": 11, "s": { "i": true, "u": true } }
+  ],
+  "color_map": [
+    { "r": 0, "c": 0, "l": 14, "s": { "fg": 1 } },
+    { "r": 2, "c": 0, "l": 11, "s": { "fg": "#00b4a0" } },
+    { "r": 3, "c": 0, "l": 13, "s": { "bg": "#8000ff" } }
+  ]
+}
+```
+
+Each entry marks a character range: `r` (row), `c` (column), `l` (length), `s` (style attributes).
+
+**Style keys:** `b` (bold), `i` (italic), `d` (dim), `u` (underline), `v` (inverse)
+**Color values:** indexed (0-7), extended (8-255), RGB (`"#rrggbb"`)
+
+`style_map` contains text attributes only. `color_map` contains foreground (`fg`) and background (`bg`) colors. Both omit entries for cells with default styling.
+
+### ANSI Text Output
+
+With `--format text` and `--render styled` or `--render color`, the output contains ANSI SGR escape sequences that recreate the terminal's visual appearance:
+
+```bash
+# Capture styled terminal output
+pilotty spawn --render color -- ls --color
+pilotty snapshot --format text --render color
+# Output: ANSI-escaped text that looks like the original terminal when printed
+
+# Pipe to another terminal
+pilotty snapshot -s myapp --format text --render color | less -R
+```
+
+This is useful for visual inspection, piping to other tools, or verifying what the terminal actually looks like.
 
 ## UI Elements (Contextual)
 

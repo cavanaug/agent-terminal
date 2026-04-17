@@ -27,6 +27,7 @@
 
 pub mod elements;
 pub mod error;
+pub mod format;
 pub mod input;
 pub mod protocol;
 pub mod snapshot;

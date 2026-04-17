@@ -26,6 +26,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::elements::Element;
+use crate::format::{ColorMapEntry, StyleMapEntry};
 
 /// Terminal dimensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -66,6 +67,18 @@ pub struct ScreenState {
     /// without parsing the full element list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content_hash: Option<u64>,
+    /// Position-based style attribute map.
+    ///
+    /// Each entry marks a character range with text attributes (bold, italic,
+    /// dim, underline, inverse). Present when render_mode is Styled or Color.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style_map: Option<Vec<StyleMapEntry>>,
+    /// Position-based color attribute map.
+    ///
+    /// Each entry marks a character range with fg/bg color data.
+    /// Present only when render_mode is Color.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color_map: Option<Vec<ColorMapEntry>>,
 }
 
 impl ScreenState {
@@ -81,6 +94,8 @@ impl ScreenState {
             text: None,
             elements: None,
             content_hash: None,
+            style_map: None,
+            color_map: None,
         }
     }
 }

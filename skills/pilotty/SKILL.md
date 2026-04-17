@@ -53,6 +53,7 @@ pilotty kill                      # End session
 ```bash
 pilotty spawn <command>           # Start TUI app (e.g., pilotty spawn htop)
 pilotty spawn --name myapp <cmd>  # Start with custom session name (--name before command)
+pilotty spawn --render color cmd  # Start with full color capture enabled
 pilotty kill                      # Kill default session
 pilotty kill -s myapp             # Kill specific session
 pilotty list-sessions             # List all active sessions
@@ -68,6 +69,15 @@ pilotty snapshot                  # Full JSON with text content and elements
 pilotty snapshot --format compact # JSON without text field
 pilotty snapshot --format text    # Plain text with cursor indicator
 pilotty snapshot -s myapp         # Snapshot specific session
+
+# Render modes control style/color fidelity
+pilotty snapshot --render basic   # Text only (default)
+pilotty snapshot --render styled  # Adds style_map (bold, italic, underline)
+pilotty snapshot --render color   # Adds style_map + color_map (full color)
+
+# ANSI text output — visually recreates the terminal screen
+pilotty snapshot --format text --render color   # ANSI-styled text with colors
+pilotty snapshot --format text --render styled  # ANSI text, text attributes only
 
 # Wait for screen to change (eliminates need for sleep!)
 HASH=$(pilotty snapshot | jq '.content_hash')
@@ -126,6 +136,7 @@ pilotty wait-for "~" -s editor    # Wait in specific session
 |--------|-------------|
 | `-s, --session <name>` | Target specific session (default: "default") |
 | `--format <fmt>` | Snapshot format: full, compact, text |
+| `--render <mode>` | Render mode: basic (text only), styled (text attrs), color (full color) |
 | `-t, --timeout <ms>` | Timeout for wait-for and await-change (default: 30000) |
 | `-r, --regex` | Treat wait-for pattern as regex |
 | `--name <name>` | Session name for spawn command |
@@ -160,6 +171,18 @@ The `snapshot` command returns structured JSON with detected UI elements:
   "content_hash": 12345678901234567890
 }
 ```
+
+With `--render styled` or `--render color`, the Full JSON snapshot also includes `style_map` and/or `color_map`:
+
+```json
+{
+  "style_map": [{ "r": 0, "c": 0, "l": 9, "s": { "b": true } }],
+  "color_map": [{ "r": 0, "c": 0, "l": 14, "s": { "fg": 1 } }]
+}
+```
+
+**Style keys:** `b` (bold), `i` (italic), `d` (dim), `u` (underline), `v` (inverse)
+**Color values:** indexed (0-7), extended (8-255), RGB (`"#rrggbb"`)
 
 Use `--format text` for a plain text view with cursor indicator:
 

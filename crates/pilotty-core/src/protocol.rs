@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
+use crate::format::RenderMode;
 use crate::snapshot::ScreenState;
 
 /// Default timeout for snapshot await_change/settle operations (30 seconds).
@@ -31,6 +32,9 @@ pub enum Command {
         /// must be an existing directory. If not provided by the client, the
         /// process inherits the daemon's working directory.
         cwd: Option<String>,
+        /// Color mode for this session's snapshots.
+        #[serde(default)]
+        render_mode: RenderMode,
     },
     /// Kill a session.
     Kill { session: Option<String> },
@@ -50,6 +54,9 @@ pub enum Command {
         /// Timeout in ms for await_change/settle operations.
         #[serde(default = "default_snapshot_timeout")]
         timeout_ms: u64,
+        /// Override the session's render mode for this snapshot.
+        #[serde(default)]
+        requested_render_mode: Option<RenderMode>,
     },
     /// Type text at cursor.
     Type {
