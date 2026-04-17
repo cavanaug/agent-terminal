@@ -45,6 +45,10 @@ impl Color {
 pub struct CellStyle {
     /// Bold text attribute.
     pub bold: bool,
+    /// Italic text attribute.
+    pub italic: bool,
+    /// Dim/faint text attribute.
+    pub dim: bool,
     /// Underlined text attribute.
     pub underline: bool,
     /// Inverse video (swapped fg/bg).
@@ -66,6 +70,20 @@ impl CellStyle {
     #[must_use]
     pub fn with_bold(mut self, bold: bool) -> Self {
         self.bold = bold;
+        self
+    }
+
+    /// Set italic attribute.
+    #[must_use]
+    pub fn with_italic(mut self, italic: bool) -> Self {
+        self.italic = italic;
+        self
+    }
+
+    /// Set dim attribute.
+    #[must_use]
+    pub fn with_dim(mut self, dim: bool) -> Self {
+        self.dim = dim;
         self
     }
 

@@ -135,6 +135,10 @@ pub struct SpawnArgs {
     /// Working directory for the spawned process [default: current directory]
     #[arg(long, value_name = "DIR")]
     pub cwd: Option<String>,
+
+    /// Color mode for snapshots: mono (text only), styled (text attributes), color (full color)
+    #[arg(long, value_enum, default_value_t = CliColorMode::Mono)]
+    pub color_mode: CliColorMode,
 }
 
 #[derive(Debug, clap::Args)]
@@ -174,6 +178,17 @@ pub enum SnapshotFormat {
     Compact,
     /// Plain text only
     Text,
+}
+
+/// Color mode for CLI (maps to protocol ColorMode).
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliColorMode {
+    /// No style data — text only
+    Mono,
+    /// Text attributes (bold, italic, dim, underline, inverse) via style_map
+    Styled,
+    /// Full style + color data via style_map + color_map
+    Color,
 }
 
 #[derive(Debug, clap::Args)]

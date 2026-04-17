@@ -111,6 +111,8 @@ fn convert_cell(vt_cell: &vt100::Cell) -> ScreenCell {
 
     let style = CellStyle {
         bold: vt_cell.bold(),
+        italic: vt_cell.italic(),
+        dim: vt_cell.dim(),
         underline: vt_cell.underline(),
         inverse: vt_cell.inverse(),
         fg_color: convert_color(vt_cell.fgcolor()),

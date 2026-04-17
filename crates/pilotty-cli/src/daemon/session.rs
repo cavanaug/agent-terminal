@@ -12,6 +12,7 @@ use tracing::{debug, info};
 use pilotty_core::elements::classify::{detect, ClassifyContext};
 use pilotty_core::elements::Element;
 use pilotty_core::error::ApiError;
+use pilotty_core::format::{build_color_map, build_style_map, ColorMode, ColorMapEntry, StyleMapEntry};
 use pilotty_core::protocol::SessionInfo;
 use pilotty_core::snapshot::compute_content_hash;
 
@@ -64,6 +65,10 @@ pub struct SnapshotData {
     /// Hash of screen content for change detection.
     /// Present when `with_elements=true`.
     pub content_hash: Option<u64>,
+    /// Position-based style attribute map (tier-filtered).
+    pub style_map: Option<Vec<StyleMapEntry>>,
+    /// Position-based color attribute map (tier-filtered).
+    pub color_map: Option<Vec<ColorMapEntry>>,
 }
 
 /// An active PTY session.
@@ -78,6 +83,8 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     /// Terminal size.
     pub size: TermSize,
+    /// Color mode for this session's snapshots.
+    pub color_mode: ColorMode,
     /// Async handle for PTY I/O.
     pub pty: AsyncPtyHandle,
     /// Terminal emulator tracking screen state.
@@ -218,6 +225,7 @@ impl SessionManager {
         name: Option<String>,
         size: Option<TermSize>,
         cwd: Option<String>,
+        color_mode: ColorMode,
     ) -> Result<SessionId, ApiError> {
         let name = name.or_else(|| Some("default".to_string()));
 
@@ -255,6 +263,7 @@ impl SessionManager {
             command,
             created_at: Utc::now(),
             size,
+            color_mode,
             pty,
             terminal,
         };
@@ -383,10 +392,23 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
+        self.get_snapshot_data_with_color_mode(id, with_elements, None).await
+    }
+
+    /// Get snapshot data with an optional color_mode override.
+    pub async fn get_snapshot_data_with_color_mode(
+        &self,
+        id: &SessionId,
+        with_elements: bool,
+        color_mode_override: Option<ColorMode>,
+    ) -> Result<SnapshotData, ApiError> {
         let sessions = self.sessions.read().await;
         let session = sessions
             .get(id)
             .ok_or_else(|| ApiError::session_not_found(&id.0))?;
+
+        // Determine effective color mode
+        let color_mode = color_mode_override.unwrap_or(session.color_mode);
 
         // Drain pending PTY output to update terminal state
         session.drain_pty_output().await;
@@ -411,6 +433,19 @@ impl SessionManager {
             (None, None)
         };
 
+        // Build style_map and color_map based on color mode
+        let style_map = if color_mode.allows_style() {
+            Some(build_style_map(&*terminal))
+        } else {
+            None
+        };
+
+        let color_map = if color_mode.allows_color() {
+            Some(build_color_map(&*terminal))
+        } else {
+            None
+        };
+
         Ok(SnapshotData {
             text,
             cursor_pos,
@@ -418,6 +453,8 @@ impl SessionManager {
             size,
             elements,
             content_hash,
+            style_map,
+            color_map,
         })
     }
 
