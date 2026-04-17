@@ -4,7 +4,7 @@ mod args;
 mod daemon;
 
 use clap::Parser;
-use pilotty_core::format::ColorMode;
+use pilotty_core::format::RenderMode;
 use pilotty_core::protocol::{Command, Request, ResponseData, ScrollDirection, SnapshotFormat};
 use tracing::{error, info};
 use uuid::Uuid;
@@ -51,10 +51,10 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
                     .ok()
                     .map(|p| p.to_string_lossy().into_owned())
             }),
-            color_mode: match args.color_mode {
-                crate::args::CliColorMode::Mono => ColorMode::Mono,
-                crate::args::CliColorMode::Styled => ColorMode::Styled,
-                crate::args::CliColorMode::Color => ColorMode::Color,
+            render_mode: match args.render_mode {
+                crate::args::CliRenderMode::Basic => RenderMode::Basic,
+                crate::args::CliRenderMode::Styled => RenderMode::Styled,
+                crate::args::CliRenderMode::Color => RenderMode::Color,
             },
         }),
         Commands::Kill(args) => Some(Command::Kill {
@@ -70,7 +70,11 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
             await_change: args.await_change,
             settle_ms: args.settle,
             timeout_ms: args.timeout,
-            requested_color_mode: None,
+            requested_render_mode: args.render_mode.map(|cm| match cm {
+                crate::args::CliRenderMode::Basic => RenderMode::Basic,
+                crate::args::CliRenderMode::Styled => RenderMode::Styled,
+                crate::args::CliRenderMode::Color => RenderMode::Color,
+            }),
         }),
         Commands::Type(args) => Some(Command::Type {
             text: args.text.clone(),

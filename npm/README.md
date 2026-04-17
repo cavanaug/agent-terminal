@@ -34,11 +34,18 @@ npm install -g pilotty
 # Spawn a TUI application
 pilotty spawn htop
 
+# Spawn with full color capture
+pilotty spawn --render color -- htop
+
 # Spawn in a specific working directory
 pilotty spawn --cwd /path/to/project bun src/app.tsx
 
 # Take a snapshot of the terminal
 pilotty snapshot
+
+# Snapshot with style/color data
+pilotty snapshot --render color              # Full JSON with style_map + color_map
+pilotty snapshot --format text --render color # ANSI-styled text output
 
 # Type text
 pilotty type "hello world"
@@ -90,6 +97,10 @@ The `snapshot` command returns structured data about the terminal screen:
   "text": "... plain text content ..."
 }
 ```
+
+With `--render styled` or `--render color`, the snapshot includes `style_map` and/or `color_map` fields with position-based style data for each styled character range.
+
+Use `--format text --render color` to get ANSI-escaped text output that recreates the terminal's visual appearance when printed.
 
 Use the cursor position and text content to understand the screen state and navigate using keyboard commands (Tab, Enter, arrow keys) or click at specific coordinates.
 

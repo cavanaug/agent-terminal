@@ -136,9 +136,9 @@ pub struct SpawnArgs {
     #[arg(long, value_name = "DIR")]
     pub cwd: Option<String>,
 
-    /// Color mode for snapshots: mono (text only), styled (text attributes), color (full color)
-    #[arg(long, value_enum, default_value_t = CliColorMode::Mono)]
-    pub color_mode: CliColorMode,
+    /// Render mode for snapshots: basic (text only), styled (text attributes), color (full color)
+    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Basic)]
+    pub render_mode: CliRenderMode,
 }
 
 #[derive(Debug, clap::Args)]
@@ -156,6 +156,10 @@ pub struct SnapshotArgs {
 
     #[arg(short, long, help = SESSION_HELP)]
     pub session: Option<String>,
+
+    /// Override render mode for this snapshot (default: use session's spawn-time mode)
+    #[arg(long = "render", value_enum)]
+    pub render_mode: Option<CliRenderMode>,
 
     /// Block until content_hash differs from this value
     #[arg(long, value_name = "HASH")]
@@ -180,11 +184,11 @@ pub enum SnapshotFormat {
     Text,
 }
 
-/// Color mode for CLI (maps to protocol ColorMode).
+/// Render mode for CLI (maps to protocol RenderMode).
 #[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliColorMode {
+pub enum CliRenderMode {
     /// No style data — text only
-    Mono,
+    Basic,
     /// Text attributes (bold, italic, dim, underline, inverse) via style_map
     Styled,
     /// Full style + color data via style_map + color_map

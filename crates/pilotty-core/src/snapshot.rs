@@ -70,13 +70,13 @@ pub struct ScreenState {
     /// Position-based style attribute map.
     ///
     /// Each entry marks a character range with text attributes (bold, italic,
-    /// dim, underline, inverse). Present when color_mode is Styled or Color.
+    /// dim, underline, inverse). Present when render_mode is Styled or Color.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style_map: Option<Vec<StyleMapEntry>>,
     /// Position-based color attribute map.
     ///
     /// Each entry marks a character range with fg/bg color data.
-    /// Present only when color_mode is Color.
+    /// Present only when render_mode is Color.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_map: Option<Vec<ColorMapEntry>>,
 }

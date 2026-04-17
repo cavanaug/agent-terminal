@@ -1,0 +1,18 @@
+[1mBold text[0m
+[2mDim text[0m
+[3mItalic text[0m
+[4mUnderline text[0m
+[7mInverse text[0m
+[31mRed foreground[0m
+[42mGreen background[0m
+[38;5;208mOrange 256-color[0m
+[48;5;33mBlue 256-bg[0m
+[38;2;0;180;160mTeal RGB fg[0m
+[48;2;128;0;255mPurple RGB bg[0m
+[1;36mBold cyan[0m
+[3;4;43mItalic underline yellow-bg[0m
+[1;4;31;44mBold underline red-on-blue[0m
+Plain unstyled line
+Normal [1mBOLD[0m normal [3mITALIC[0m end
+[30m0[31m1[32m2[33m3[34m4[35m5[36m6[37m7[0m
+[7;38;2;255;128;0mInverse orange-fg[0m
