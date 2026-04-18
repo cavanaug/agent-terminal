@@ -75,6 +75,23 @@ jobs:
           tar -czvf ../../../pilotty-${{ matrix.target }}.${{ matrix.archive }} pilotty
           cd ../../..
 
+      # Generate shell completions from native builds only (completions are arch-independent)
+      - name: Generate shell completions
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          mkdir -p completions
+          BINARY=target/${{ matrix.target }}/release/pilotty
+          $BINARY completions bash > completions/pilotty.bash
+          $BINARY completions zsh > completions/_pilotty
+          $BINARY completions fish > completions/pilotty.fish
+
+      - name: Upload completions artifact
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: completions
+          path: completions/
+
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
@@ -175,11 +192,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: pilotty-*
           path: artifacts
+
+      - name: Download completions
+        uses: actions/download-artifact@v4
+        with:
+          name: completions
+          path: artifacts/completions
+
+      - name: Package completions
+        run: |
+          cd artifacts/completions
+          tar -czvf ../pilotty-completions.tar.gz pilotty.bash _pilotty pilotty.fish
+          cd ../..
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

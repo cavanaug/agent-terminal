@@ -110,6 +110,14 @@ Examples:
     /// Show an end-to-end usage example
     Examples,
 
+    /// Generate shell completions
+    #[command(after_help = "\
+Examples:
+  pilotty completions bash > ~/.local/share/bash-completion/completions/pilotty
+  pilotty completions zsh > ~/.zfunc/_pilotty
+  pilotty completions fish > ~/.config/fish/completions/pilotty.fish")]
+    Completions(CompletionsArgs),
+
     /// Start the daemon process (usually auto-started)
     Daemon,
 
@@ -136,9 +144,74 @@ pub struct SpawnArgs {
     #[arg(long, value_name = "DIR")]
     pub cwd: Option<String>,
 
-    /// Render mode for snapshots: basic (text only), styled (text attributes), color (full color)
-    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Basic)]
-    pub render_mode: CliRenderMode,
+    /// Terminal type advertised to the spawned process [default: 256color]
+    ///
+    /// Controls what terminal capabilities the application sees.
+    /// Sets both TERM and COLORTERM environment variables appropriately.
+    #[arg(long, value_enum, default_value_t = XtermVariant::C256color)]
+    pub xterm: XtermVariant,
+
+    /// Terminal size as COLSxROWS (e.g. 120x60) [default: 80x24]
+    #[arg(long, value_name = "COLSxROWS", value_parser = parse_geometry)]
+    pub geometry: Option<(u16, u16)>,
+}
+
+/// Parse a geometry string like "120x60" into (cols, rows).
+fn parse_geometry(s: &str) -> Result<(u16, u16), String> {
+    let parts: Vec<&str> = s.split('x').collect();
+    if parts.len() != 2 {
+        return Err(format!("expected COLSxROWS format (e.g. 120x60), got '{s}'"));
+    }
+    let cols: u16 = parts[0].parse().map_err(|_| format!("invalid columns: '{}'", parts[0]))?;
+    let rows: u16 = parts[1].parse().map_err(|_| format!("invalid rows: '{}'", parts[1]))?;
+    if cols == 0 || rows == 0 {
+        return Err("columns and rows must be greater than 0".to_string());
+    }
+    if cols > 500 {
+        return Err(format!("columns too large: {cols} (max 500)"));
+    }
+    if rows > 500 {
+        return Err(format!("rows too large: {rows} (max 500)"));
+    }
+    Ok((cols, rows))
+}
+
+/// Xterm terminal type variants controlling TERM and COLORTERM env vars.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum XtermVariant {
+    /// No color (TERM=xterm-mono)
+    Mono,
+    /// 8 colors (TERM=xterm)
+    Basic,
+    /// 16 colors (TERM=xterm-16color)
+    #[value(name = "16color")]
+    C16color,
+    /// 256 indexed colors (TERM=xterm-256color)
+    #[value(name = "256color")]
+    C256color,
+    /// 24-bit truecolor (TERM=xterm-direct, COLORTERM=truecolor)
+    Direct,
+}
+
+impl XtermVariant {
+    /// TERM environment variable value for this variant.
+    pub fn term_value(self) -> &'static str {
+        match self {
+            Self::Mono => "xterm-mono",
+            Self::Basic => "xterm",
+            Self::C16color => "xterm-16color",
+            Self::C256color => "xterm-256color",
+            Self::Direct => "xterm-direct",
+        }
+    }
+
+    /// COLORTERM environment variable value, if applicable.
+    pub fn colorterm_value(self) -> Option<&'static str> {
+        match self {
+            Self::Direct => Some("truecolor"),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, clap::Args)]
@@ -157,9 +230,9 @@ pub struct SnapshotArgs {
     #[arg(short, long, help = SESSION_HELP)]
     pub session: Option<String>,
 
-    /// Override render mode for this snapshot (default: use session's spawn-time mode)
-    #[arg(long = "render", value_enum)]
-    pub render_mode: Option<CliRenderMode>,
+    /// Render mode for this snapshot: basic (text only), styled (text attributes), color (full color) [default: basic]
+    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Basic)]
+    pub render_mode: CliRenderMode,
 
     /// Block until content_hash differs from this value
     #[arg(long, value_name = "HASH")]
@@ -276,6 +349,13 @@ pub struct WaitForArgs {
 
     #[arg(short, long, help = SESSION_HELP)]
     pub session: Option<String>,
+}
+
+#[derive(Debug, clap::Args)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for
+    #[arg(value_enum)]
+    pub shell: clap_complete::Shell,
 }
 
 /// End-to-end example text for the `examples` command.

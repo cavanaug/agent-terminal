@@ -43,15 +43,27 @@ pub struct CursorState {
     pub visible: bool,
 }
 
+/// A single row of screen text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextLine {
+    /// Row index (0-based).
+    pub r: u16,
+    /// Right-trimmed text content of this row.
+    pub t: String,
+}
+
 /// Complete screen state snapshot.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScreenState {
     pub snapshot_id: u64,
     pub size: TerminalSize,
+    /// TERM value for this session (e.g. "xterm-256color").
+    pub term: String,
     pub cursor: CursorState,
-    /// Plain text content of the screen.
+    /// Screen text as an array of rows, one entry per terminal row.
+    /// Each entry contains the row index and right-trimmed text content.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
+    pub text: Option<Vec<TextLine>>,
     /// Detected interactive UI elements.
     ///
     /// Elements are detected using visual style segmentation and pattern
@@ -86,6 +98,7 @@ impl ScreenState {
         Self {
             snapshot_id: 0,
             size: TerminalSize { cols, rows },
+            term: "xterm-256color".to_string(),
             cursor: CursorState {
                 row: 0,
                 col: 0,

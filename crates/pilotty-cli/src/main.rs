@@ -3,7 +3,7 @@
 mod args;
 mod daemon;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use pilotty_core::format::RenderMode;
 use pilotty_core::protocol::{Command, Request, ResponseData, ScrollDirection, SnapshotFormat};
 use tracing::{error, info};
@@ -45,17 +45,15 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
         Commands::Spawn(args) => Some(Command::Spawn {
             command: args.command.clone(),
             session_name: args.name.clone(),
-            // Default to client's cwd if --cwd not explicitly provided
             cwd: args.cwd.clone().or_else(|| {
                 std::env::current_dir()
                     .ok()
                     .map(|p| p.to_string_lossy().into_owned())
             }),
-            render_mode: match args.render_mode {
-                crate::args::CliRenderMode::Basic => RenderMode::Basic,
-                crate::args::CliRenderMode::Styled => RenderMode::Styled,
-                crate::args::CliRenderMode::Color => RenderMode::Color,
-            },
+            term: args.xterm.term_value().to_string(),
+            colorterm: args.xterm.colorterm_value().map(String::from),
+            cols: args.geometry.map(|(c, _)| c),
+            rows: args.geometry.map(|(_, r)| r),
         }),
         Commands::Kill(args) => Some(Command::Kill {
             session: args.session.clone(),
@@ -70,11 +68,11 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
             await_change: args.await_change,
             settle_ms: args.settle,
             timeout_ms: args.timeout,
-            requested_render_mode: args.render_mode.map(|cm| match cm {
+            render_mode: match args.render_mode {
                 crate::args::CliRenderMode::Basic => RenderMode::Basic,
                 crate::args::CliRenderMode::Styled => RenderMode::Styled,
                 crate::args::CliRenderMode::Color => RenderMode::Color,
-            }),
+            },
         }),
         Commands::Type(args) => Some(Command::Type {
             text: args.text.clone(),
@@ -112,6 +110,7 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
         }),
         Commands::Daemon => unreachable!("Daemon command handled separately"),
         Commands::Examples => None,
+        Commands::Completions(_) => None,
         Commands::Stop => Some(Command::Shutdown),
     }
 }
@@ -120,9 +119,17 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
 fn run_client_command(cli: Cli) -> anyhow::Result<()> {
     // Handle commands that don't need daemon communication
     let Some(command) = cli_to_command(&cli) else {
-        // Examples command just prints and exits
+        // Commands that don't need daemon communication
         if let Commands::Examples = cli.command {
             println!("{}", crate::args::EXAMPLES_TEXT);
+        }
+        if let Commands::Completions(args) = cli.command {
+            clap_complete::generate(
+                args.shell,
+                &mut Cli::command(),
+                "pilotty",
+                &mut std::io::stdout(),
+            );
         }
         return Ok(());
     };

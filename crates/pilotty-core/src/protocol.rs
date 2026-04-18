@@ -11,6 +11,16 @@ fn default_snapshot_timeout() -> u64 {
     30000
 }
 
+/// Default render mode for snapshots — text only, no style/color data.
+fn default_render_mode() -> RenderMode {
+    RenderMode::Basic
+}
+
+/// Default TERM value for spawned processes.
+fn default_term() -> String {
+    "xterm-256color".to_string()
+}
+
 /// A request from CLI to daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request {
@@ -27,14 +37,19 @@ pub enum Command {
         command: Vec<String>,
         session_name: Option<String>,
         /// Working directory for the spawned process.
-        ///
-        /// The CLI defaults this to the client's current directory. The path
-        /// must be an existing directory. If not provided by the client, the
-        /// process inherits the daemon's working directory.
         cwd: Option<String>,
-        /// Color mode for this session's snapshots.
+        /// TERM environment variable value (e.g. "xterm-256color").
+        #[serde(default = "default_term")]
+        term: String,
+        /// COLORTERM environment variable value, if any (e.g. "truecolor").
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colorterm: Option<String>,
+        /// Terminal columns. Defaults to 80 if not specified.
         #[serde(default)]
-        render_mode: RenderMode,
+        cols: Option<u16>,
+        /// Terminal rows. Defaults to 24 if not specified.
+        #[serde(default)]
+        rows: Option<u16>,
     },
     /// Kill a session.
     Kill { session: Option<String> },
@@ -55,8 +70,9 @@ pub enum Command {
         #[serde(default = "default_snapshot_timeout")]
         timeout_ms: u64,
         /// Override the session's render mode for this snapshot.
-        #[serde(default)]
-        requested_render_mode: Option<RenderMode>,
+        /// Defaults to Color (full style + color data).
+        #[serde(default = "default_render_mode")]
+        render_mode: RenderMode,
     },
     /// Type text at cursor.
     Type {

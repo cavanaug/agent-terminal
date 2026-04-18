@@ -48,20 +48,42 @@ pilotty enables AI agents to interact with terminal applications through a simpl
 
 ### npm (recommended)
 
+Requires Node.js 16+.
+
 ```bash
 npm install -g pilotty
 ```
 
+### cargo install
+
+Requires [Rust](https://rustup.rs) 1.70+.
+
+```bash
+cargo install pilotty
+```
+
 ### From Source
+
+Requires [Rust](https://rustup.rs) 1.70+.
 
 ```bash
 git clone https://github.com/cavanaug/pilotty
 cd pilotty
-cargo build --release
-./target/release/pilotty --help
+cargo install --path crates/pilotty-cli
 ```
 
-Requires [Rust](https://rustup.rs) 1.70+.
+By default, `cargo install` places the binary in `~/.cargo/bin`, which is added to your `PATH` automatically by rustup. To install elsewhere:
+
+```bash
+cargo install --path crates/pilotty-cli --root ~/.local
+```
+
+### Verify Installation
+
+```bash
+pilotty --version
+pilotty --help
+```
 
 ## Platform Support
 
