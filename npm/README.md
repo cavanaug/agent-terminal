@@ -34,9 +34,6 @@ npm install -g pilotty
 # Spawn a TUI application
 pilotty spawn htop
 
-# Spawn with full color capture
-pilotty spawn --render color -- htop
-
 # Spawn in a specific working directory
 pilotty spawn --cwd /path/to/project bun src/app.tsx
 
@@ -44,7 +41,7 @@ pilotty spawn --cwd /path/to/project bun src/app.tsx
 pilotty snapshot
 
 # Snapshot with style/color data
-pilotty snapshot --render color              # Full JSON with style_map + color_map
+pilotty snapshot --render color               # Full JSON with style_map + color_map (default)
 pilotty snapshot --format text --render color # ANSI-styled text output
 
 # Type text

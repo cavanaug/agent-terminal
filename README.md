@@ -131,7 +131,6 @@ pilotty stop
 pilotty spawn <command>           # Spawn a TUI app (e.g., pilotty spawn vim file.txt)
 pilotty spawn --name myapp <cmd>  # Spawn with a custom session name
 pilotty spawn --cwd /path cmd     # Spawn in a specific working directory
-pilotty spawn --render color cmd  # Spawn with full color capture enabled
 pilotty kill                      # Kill default session
 pilotty kill -s myapp             # Kill specific session
 pilotty list-sessions             # List all active sessions
@@ -148,9 +147,9 @@ pilotty snapshot --format compact # JSON without text field
 pilotty snapshot --format text    # Plain text with cursor indicator
 
 # Render modes control style/color fidelity
-pilotty snapshot --render basic   # Text only (default)
+pilotty snapshot --render basic   # Text only
 pilotty snapshot --render styled  # Text attributes (bold, italic, underline, dim, inverse)
-pilotty snapshot --render color   # Full color (text attributes + fg/bg colors)
+pilotty snapshot --render color   # Full color (default: style_map + color_map)
 
 # ANSI text output — visually recreates the terminal screen
 pilotty snapshot --format text --render color   # ANSI-styled text output
@@ -222,20 +221,21 @@ The `snapshot` command returns structured data about the terminal screen:
 
 ### Render Modes
 
-The `--render` flag controls how much visual fidelity is captured in snapshots. Set it at spawn time (applies to all snapshots) or per-snapshot (overrides the session default):
+The `--render` flag controls how much visual fidelity each snapshot returns. Sessions always capture full style + color data internally, and `pilotty snapshot` defaults to `--render color` unless you override it per request:
 
 | Mode | `--format full` (JSON) | `--format text` |
 |------|----------------------|-----------------|
-| `basic` (default) | text + elements | Plain text with cursor indicator |
+| `basic` | text + elements | Plain text with cursor indicator |
 | `styled` | text + elements + `style_map` | ANSI text with bold/italic/underline |
-| `color` | text + elements + `style_map` + `color_map` | ANSI text with full color |
+| `color` (default) | text + elements + `style_map` + `color_map` | ANSI text with full color |
 
 ```bash
-# Set at spawn time
-pilotty spawn --render color -- htop
+# Default full snapshot includes style_map + color_map
+pilotty snapshot
 
 # Override per-snapshot
 pilotty snapshot --render styled
+pilotty snapshot --render basic
 ```
 
 ### Style Map & Color Map
@@ -269,7 +269,7 @@ With `--format text` and `--render styled` or `--render color`, the output conta
 
 ```bash
 # Capture styled terminal output
-pilotty spawn --render color -- ls --color
+pilotty spawn ls --color
 pilotty snapshot --format text --render color
 # Output: ANSI-escaped text that looks like the original terminal when printed
 

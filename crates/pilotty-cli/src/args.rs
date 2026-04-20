@@ -230,8 +230,8 @@ pub struct SnapshotArgs {
     #[arg(short, long, help = SESSION_HELP)]
     pub session: Option<String>,
 
-    /// Render mode for this snapshot: basic (text only), styled (text attributes), color (full color) [default: basic]
-    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Basic)]
+    /// Render mode for this snapshot: basic (text only), styled (text attributes), color (full color) [default: color]
+    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Color)]
     pub render_mode: CliRenderMode,
 
     /// Block until content_hash differs from this value
@@ -390,7 +390,7 @@ pilotty list-sessions
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands};
+    use super::{Cli, Commands, CliRenderMode};
     use clap::Parser;
 
     #[test]
@@ -402,6 +402,18 @@ mod tests {
                 assert_eq!(args.command, vec!["bash", "-c", "echo hello"]);
             }
             _ => panic!("Expected spawn command"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_defaults_to_color_render_mode() {
+        let cli = Cli::parse_from(["pilotty", "snapshot"]);
+
+        match cli.command {
+            Commands::Snapshot(args) => {
+                assert!(matches!(args.render_mode, CliRenderMode::Color));
+            }
+            _ => panic!("Expected snapshot command"),
         }
     }
 }

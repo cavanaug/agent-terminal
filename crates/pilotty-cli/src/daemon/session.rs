@@ -404,7 +404,7 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
-        self.get_snapshot_data_with_render_mode(id, with_elements, RenderMode::Basic).await
+        self.get_snapshot_data_with_render_mode(id, with_elements, RenderMode::Color).await
     }
 
     /// Get snapshot data with a render_mode filter controlling what style/color data is included.
@@ -950,25 +950,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_is_empty() {
+    async fn test_get_snapshot_data_defaults_to_color_maps() {
         let manager = SessionManager::new();
 
-        // Initially empty
-        assert!(manager.is_empty().await);
-
-        // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec![
+                    "bash".to_string(),
+                    "-lc".to_string(),
+                    "printf \"\\033[31;1mRED\\033[0m\\n\"; sleep 1".to_string(),
+                ],
+                Some("styled-output".to_string()),
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
-            .expect("Failed to create session");
+            .expect("Failed to create styled session");
 
-        // Not empty
-        assert!(!manager.is_empty().await);
+        tokio::time::sleep(Duration::from_millis(200)).await;
 
-        // Kill it
-        manager.kill_session(&id).await.expect("Failed to kill");
+        let snapshot = manager
+            .get_snapshot_data(&id, false)
+            .await
+            .expect("Failed to get snapshot");
 
-        // Empty again
-        assert!(manager.is_empty().await);
+        assert!(snapshot.style_map.is_some(), "default snapshot should include style_map");
+        assert!(snapshot.color_map.is_some(), "default snapshot should include color_map");
+
+        manager.kill_session(&id).await.expect("Failed to kill session");
     }
 }

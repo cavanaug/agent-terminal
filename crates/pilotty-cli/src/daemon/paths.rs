@@ -1,51 +1,63 @@
 //! Socket and PID file path resolution.
 //!
-//! Priority for socket directory:
-//! 1. `PILOTTY_SOCKET_DIR` (explicit override)
-//! 2. `XDG_RUNTIME_DIR/pilotty` (Linux standard)
-//! 3. `~/.pilotty` (home directory fallback)
-//! 4. `/tmp/pilotty` (last resort)
+//! Priority for the runtime directory:
+//! 1. `AGENT_TERMINAL_SOCKET_DIR` (explicit override)
+//! 2. `XDG_RUNTIME_DIR/agent-terminal` (Linux standard)
+//! 3. `~/.agent-terminal` (home directory fallback)
+//! 4. `/tmp/agent-terminal` (last resort)
 //!
-//! Session support via `PILOTTY_SESSION` env var (default: "default").
-//! Each session gets its own socket file: `{socket_dir}/{session}.sock`
+//! Session support via `AGENT_TERMINAL_SESSION` env var (default: `default`).
+//! Each session gets its own socket and PID file under the resolved runtime
+//! directory: `{runtime_dir}/{session}.sock` and `{runtime_dir}/{session}.pid`.
 
 use std::env;
 use std::path::PathBuf;
 
+const SESSION_ENV_VAR: &str = "AGENT_TERMINAL_SESSION";
+const SOCKET_DIR_ENV_VAR: &str = "AGENT_TERMINAL_SOCKET_DIR";
+const XDG_RUNTIME_DIR_ENV_VAR: &str = "XDG_RUNTIME_DIR";
+const XDG_RUNTIME_SUBDIR: &str = "agent-terminal";
+const HOME_RUNTIME_SUBDIR: &str = ".agent-terminal";
+const TEMP_RUNTIME_SUBDIR: &str = "agent-terminal";
+
 /// Get current session name from env or default.
 pub fn get_session() -> String {
-    env::var("PILOTTY_SESSION").unwrap_or_else(|_| "default".to_string())
+    env::var(SESSION_ENV_VAR).unwrap_or_else(|_| "default".to_string())
 }
 
-/// Get socket directory with priority fallback.
-///
-/// Priority:
-/// 1. `PILOTTY_SOCKET_DIR` (explicit override, ignores empty string)
-/// 2. `XDG_RUNTIME_DIR/pilotty` (Linux standard, ignores empty string)
-/// 3. `~/.pilotty` (home directory fallback)
-/// 4. System temp dir (last resort)
-pub fn get_socket_dir() -> PathBuf {
+fn resolve_socket_dir(home_dir: Option<PathBuf>, temp_dir: PathBuf) -> PathBuf {
     // 1. Explicit override (ignore empty)
-    if let Ok(dir) = env::var("PILOTTY_SOCKET_DIR") {
+    if let Ok(dir) = env::var(SOCKET_DIR_ENV_VAR) {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
     }
 
     // 2. XDG_RUNTIME_DIR (Linux standard, ignore empty)
-    if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
+    if let Ok(runtime_dir) = env::var(XDG_RUNTIME_DIR_ENV_VAR) {
         if !runtime_dir.is_empty() {
-            return PathBuf::from(runtime_dir).join("pilotty");
+            return PathBuf::from(runtime_dir).join(XDG_RUNTIME_SUBDIR);
         }
     }
 
     // 3. Home directory fallback
-    if let Some(home) = dirs::home_dir() {
-        return home.join(".pilotty");
+    if let Some(home) = home_dir {
+        return home.join(HOME_RUNTIME_SUBDIR);
     }
 
     // 4. Last resort: temp dir
-    env::temp_dir().join("pilotty")
+    temp_dir.join(TEMP_RUNTIME_SUBDIR)
+}
+
+/// Get socket directory with priority fallback.
+///
+/// Priority:
+/// 1. `AGENT_TERMINAL_SOCKET_DIR` (explicit override, ignores empty string)
+/// 2. `XDG_RUNTIME_DIR/agent-terminal` (Linux standard, ignores empty string)
+/// 3. `~/.agent-terminal` (home directory fallback)
+/// 4. System temp dir + `agent-terminal` (last resort)
+pub fn get_socket_dir() -> PathBuf {
+    resolve_socket_dir(dirs::home_dir(), env::temp_dir())
 }
 
 /// Validate a session name to prevent path traversal attacks.
@@ -112,10 +124,12 @@ pub fn ensure_socket_dir() -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     use crate::daemon::paths::{
-        get_session, get_socket_dir, get_socket_path, sanitize_session_name,
+        get_pid_path, get_session, get_socket_dir, get_socket_path, resolve_socket_dir,
+        sanitize_session_name, SESSION_ENV_VAR, SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR,
     };
 
     // Mutex to serialize tests that manipulate environment variables.
@@ -131,8 +145,11 @@ mod tests {
 
     impl EnvGuard {
         fn new(var_names: &[&str]) -> Self {
-            // Lock first to prevent races
-            let lock = ENV_MUTEX.lock().unwrap();
+            // Lock first to prevent races. If a prior test panicked while holding the
+            // mutex, recover the guard so subsequent runs can still proceed.
+            let lock = ENV_MUTEX
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let vars = var_names
                 .iter()
                 .map(|name| (name.to_string(), std::env::var(name).ok()))
@@ -144,7 +161,7 @@ mod tests {
     impl Drop for EnvGuard {
         fn drop(&mut self) {
             for (name, value) in &self.vars {
-                // SAFETY: We hold ENV_MUTEX, so no other test thread is modifying env vars
+                // SAFETY: We hold ENV_MUTEX, so no other test thread is modifying env vars.
                 unsafe {
                     match value {
                         Some(v) => std::env::set_var(name, v),
@@ -152,146 +169,243 @@ mod tests {
                     }
                 }
             }
-            // _lock is dropped here, releasing the mutex
+            // _lock is dropped here, releasing the mutex.
         }
     }
 
     #[test]
     fn test_get_session_default() {
-        let _guard = EnvGuard::new(&["PILOTTY_SESSION"]);
-        // SAFETY: We hold ENV_MUTEX via _guard
-        unsafe { std::env::remove_var("PILOTTY_SESSION") };
+        let _guard = EnvGuard::new(&[SESSION_ENV_VAR]);
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe { std::env::remove_var(SESSION_ENV_VAR) };
 
         assert_eq!(get_session(), "default");
     }
 
     #[test]
     fn test_get_session_custom() {
-        let _guard = EnvGuard::new(&["PILOTTY_SESSION"]);
-        // SAFETY: We hold ENV_MUTEX via _guard
-        unsafe { std::env::set_var("PILOTTY_SESSION", "my-session") };
+        let _guard = EnvGuard::new(&[SESSION_ENV_VAR]);
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe { std::env::set_var(SESSION_ENV_VAR, "my-session") };
 
         assert_eq!(get_session(), "my-session");
     }
 
     #[test]
-    fn test_get_socket_dir_explicit_override() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "XDG_RUNTIME_DIR"]);
+    fn test_get_socket_dir_explicit_override_takes_precedence() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
 
-        // SAFETY: We hold ENV_MUTEX via _guard
+        // SAFETY: We hold ENV_MUTEX via _guard.
         unsafe {
-            std::env::set_var("PILOTTY_SOCKET_DIR", "/custom/socket/path");
-            std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/custom/socket/path");
+            std::env::set_var(XDG_RUNTIME_DIR_ENV_VAR, "/run/user/1000");
+        }
+
+        assert_eq!(get_socket_dir(), PathBuf::from("/custom/socket/path"));
+    }
+
+    #[test]
+    fn test_get_socket_dir_ignores_empty_override_and_uses_xdg() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "");
+            std::env::set_var(XDG_RUNTIME_DIR_ENV_VAR, "/run/user/1000");
         }
 
         assert_eq!(
             get_socket_dir(),
-            std::path::PathBuf::from("/custom/socket/path")
+            PathBuf::from("/run/user/1000/agent-terminal")
         );
-    }
-
-    #[test]
-    fn test_get_socket_dir_ignores_empty() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "XDG_RUNTIME_DIR"]);
-
-        // SAFETY: We hold ENV_MUTEX via _guard
-        unsafe {
-            std::env::set_var("PILOTTY_SOCKET_DIR", "");
-            std::env::remove_var("XDG_RUNTIME_DIR");
-        }
-
-        // Should fall through to home dir
-        assert!(get_socket_dir().to_string_lossy().ends_with(".pilotty"));
     }
 
     #[test]
     fn test_get_socket_dir_xdg_runtime() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "XDG_RUNTIME_DIR"]);
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
 
-        // SAFETY: We hold ENV_MUTEX via _guard
+        // SAFETY: We hold ENV_MUTEX via _guard.
         unsafe {
-            std::env::remove_var("PILOTTY_SOCKET_DIR");
-            std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000");
+            std::env::remove_var(SOCKET_DIR_ENV_VAR);
+            std::env::set_var(XDG_RUNTIME_DIR_ENV_VAR, "/run/user/1000");
         }
 
         assert_eq!(
             get_socket_dir(),
-            std::path::PathBuf::from("/run/user/1000/pilotty")
+            PathBuf::from("/run/user/1000/agent-terminal")
         );
     }
 
     #[test]
-    fn test_get_socket_dir_home_fallback() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "XDG_RUNTIME_DIR"]);
+    fn test_get_socket_dir_ignores_empty_xdg_and_uses_home() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
 
-        // SAFETY: We hold ENV_MUTEX via _guard
+        // SAFETY: We hold ENV_MUTEX via _guard.
         unsafe {
-            std::env::remove_var("PILOTTY_SOCKET_DIR");
-            std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::remove_var(SOCKET_DIR_ENV_VAR);
+            std::env::set_var(XDG_RUNTIME_DIR_ENV_VAR, "");
         }
 
         let result = get_socket_dir();
-        assert!(result.to_string_lossy().ends_with(".pilotty"));
+        assert!(result.to_string_lossy().ends_with(".agent-terminal"));
+    }
+
+    #[test]
+    fn test_get_socket_dir_home_fallback() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::remove_var(SOCKET_DIR_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        let result = get_socket_dir();
+        assert!(result.to_string_lossy().ends_with(".agent-terminal"));
+    }
+
+    #[test]
+    fn test_resolve_socket_dir_uses_temp_dir_last_resort() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::remove_var(SOCKET_DIR_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        assert_eq!(
+            resolve_socket_dir(None, PathBuf::from("/tmp/runtime-fallback")),
+            PathBuf::from("/tmp/runtime-fallback/agent-terminal")
+        );
     }
 
     #[test]
     fn test_get_socket_path_default_session() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "PILOTTY_SESSION", "XDG_RUNTIME_DIR"]);
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
 
-        // SAFETY: We hold ENV_MUTEX via _guard
+        // SAFETY: We hold ENV_MUTEX via _guard.
         unsafe {
-            std::env::set_var("PILOTTY_SOCKET_DIR", "/tmp/test");
-            std::env::remove_var("PILOTTY_SESSION");
-            std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::remove_var(SESSION_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
         }
 
         assert_eq!(
             get_socket_path(None),
-            std::path::PathBuf::from("/tmp/test/default.sock")
+            PathBuf::from("/tmp/test/default.sock")
         );
     }
 
     #[test]
     fn test_get_socket_path_custom_session() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "PILOTTY_SESSION", "XDG_RUNTIME_DIR"]);
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
 
-        // SAFETY: We hold ENV_MUTEX via _guard
+        // SAFETY: We hold ENV_MUTEX via _guard.
         unsafe {
-            std::env::set_var("PILOTTY_SOCKET_DIR", "/tmp/test");
-            std::env::remove_var("PILOTTY_SESSION");
-            std::env::remove_var("XDG_RUNTIME_DIR");
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::remove_var(SESSION_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
         }
 
         assert_eq!(
             get_socket_path(Some("my-session")),
-            std::path::PathBuf::from("/tmp/test/my-session.sock")
+            PathBuf::from("/tmp/test/my-session.sock")
+        );
+    }
+
+    #[test]
+    fn test_get_pid_path_custom_session() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::remove_var(SESSION_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        assert_eq!(
+            get_pid_path(Some("my-session")),
+            PathBuf::from("/tmp/test/my-session.pid")
+        );
+    }
+
+    #[test]
+    fn test_socket_path_sanitizes_empty_env_session() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::set_var(SESSION_ENV_VAR, "");
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        assert_eq!(
+            get_socket_path(None),
+            PathBuf::from("/tmp/test/default.sock")
+        );
+    }
+
+    #[test]
+    fn test_socket_path_sanitizes_traversal_session_from_env() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::set_var(SESSION_ENV_VAR, "../../../etc/passwd");
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        assert_eq!(
+            get_socket_path(None),
+            PathBuf::from("/tmp/test/default.sock")
+        );
+    }
+
+    #[test]
+    fn test_pid_path_sanitizes_traversal_session_argument() {
+        let _guard = EnvGuard::new(&[SOCKET_DIR_ENV_VAR, SESSION_ENV_VAR, XDG_RUNTIME_DIR_ENV_VAR]);
+
+        // SAFETY: We hold ENV_MUTEX via _guard.
+        unsafe {
+            std::env::set_var(SOCKET_DIR_ENV_VAR, "/tmp/test");
+            std::env::remove_var(SESSION_ENV_VAR);
+            std::env::remove_var(XDG_RUNTIME_DIR_ENV_VAR);
+        }
+
+        assert_eq!(
+            get_pid_path(Some("../../../etc/passwd")),
+            PathBuf::from("/tmp/test/default.pid")
         );
     }
 
     #[test]
     fn test_sanitize_valid_names() {
-        // Simple alphanumeric
+        // Simple alphanumeric.
         assert_eq!(sanitize_session_name("default"), "default");
         assert_eq!(sanitize_session_name("session1"), "session1");
         assert_eq!(sanitize_session_name("MySession"), "MySession");
 
-        // With hyphens and underscores
+        // With hyphens and underscores.
         assert_eq!(sanitize_session_name("my-session"), "my-session");
         assert_eq!(sanitize_session_name("my_session"), "my_session");
         assert_eq!(sanitize_session_name("my-session_123"), "my-session_123");
 
-        // Underscores at start are fine
+        // Underscores at start are fine.
         assert_eq!(sanitize_session_name("_private"), "_private");
     }
 
     #[test]
     fn test_sanitize_path_traversal_attacks() {
-        // Classic path traversal
+        // Classic path traversal.
         assert_eq!(sanitize_session_name("../../../etc/passwd"), "default");
         assert_eq!(sanitize_session_name(".."), "default");
         assert_eq!(sanitize_session_name("foo/../bar"), "default");
 
-        // Sneaky variants
+        // Sneaky variants.
         assert_eq!(sanitize_session_name("foo/bar"), "default");
         assert_eq!(sanitize_session_name("/etc/passwd"), "default");
         assert_eq!(sanitize_session_name("..\\..\\windows"), "default");
@@ -308,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_hyphen_at_start() {
-        // Hyphens at start could be interpreted as CLI options
+        // Hyphens at start could be interpreted as CLI options.
         assert_eq!(sanitize_session_name("-session"), "default");
         assert_eq!(sanitize_session_name("--session"), "default");
         assert_eq!(sanitize_session_name("-"), "default");
@@ -332,23 +446,5 @@ mod tests {
     fn test_sanitize_null_bytes() {
         assert_eq!(sanitize_session_name("session\0evil"), "default");
         assert_eq!(sanitize_session_name("\0"), "default");
-    }
-
-    #[test]
-    fn test_socket_path_sanitizes_session() {
-        let _guard = EnvGuard::new(&["PILOTTY_SOCKET_DIR", "PILOTTY_SESSION", "XDG_RUNTIME_DIR"]);
-
-        // SAFETY: We hold ENV_MUTEX via _guard
-        unsafe {
-            std::env::set_var("PILOTTY_SOCKET_DIR", "/tmp/test");
-            std::env::remove_var("PILOTTY_SESSION");
-            std::env::remove_var("XDG_RUNTIME_DIR");
-        }
-
-        // Path traversal attempt should be sanitized to "default"
-        assert_eq!(
-            get_socket_path(Some("../../../etc/passwd")),
-            std::path::PathBuf::from("/tmp/test/default.sock")
-        );
     }
 }

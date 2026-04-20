@@ -53,7 +53,6 @@ pilotty kill                      # End session
 ```bash
 pilotty spawn <command>           # Start TUI app (e.g., pilotty spawn htop)
 pilotty spawn --name myapp <cmd>  # Start with custom session name (--name before command)
-pilotty spawn --render color cmd  # Start with full color capture enabled
 pilotty kill                      # Kill default session
 pilotty kill -s myapp             # Kill specific session
 pilotty list-sessions             # List all active sessions
@@ -71,9 +70,9 @@ pilotty snapshot --format text    # Plain text with cursor indicator
 pilotty snapshot -s myapp         # Snapshot specific session
 
 # Render modes control style/color fidelity
-pilotty snapshot --render basic   # Text only (default)
+pilotty snapshot --render basic   # Text only
 pilotty snapshot --render styled  # Adds style_map (bold, italic, underline)
-pilotty snapshot --render color   # Adds style_map + color_map (full color)
+pilotty snapshot --render color   # Adds style_map + color_map (default)
 
 # ANSI text output — visually recreates the terminal screen
 pilotty snapshot --format text --render color   # ANSI-styled text with colors

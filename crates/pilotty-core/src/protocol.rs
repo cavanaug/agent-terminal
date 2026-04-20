@@ -11,9 +11,9 @@ fn default_snapshot_timeout() -> u64 {
     30000
 }
 
-/// Default render mode for snapshots — text only, no style/color data.
+/// Default render mode for snapshots — full style + color data.
 fn default_render_mode() -> RenderMode {
-    RenderMode::Basic
+    RenderMode::Color
 }
 
 /// Default TERM value for spawned processes.
@@ -205,4 +205,31 @@ pub struct SessionInfo {
     pub name: Option<String>,
     pub command: Vec<String>,
     pub created_at: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_defaults_render_mode_to_color_when_field_missing() {
+        let command: Command = serde_json::from_str(
+            r#"{
+                "action": "snapshot",
+                "session": "default",
+                "format": "full",
+                "await_change": null,
+                "settle_ms": 0,
+                "timeout_ms": 30000
+            }"#,
+        )
+        .expect("snapshot command should deserialize");
+
+        match command {
+            Command::Snapshot { render_mode, .. } => {
+                assert_eq!(render_mode, RenderMode::Color);
+            }
+            other => panic!("expected snapshot command, got {other:?}"),
+        }
+    }
 }
