@@ -169,7 +169,10 @@ mod tests {
     async fn test_client_connects_to_running_daemon() {
         // Use a temp socket path
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-client-test-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-client-test-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         // Start server

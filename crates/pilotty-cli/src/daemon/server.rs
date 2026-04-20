@@ -1425,7 +1425,7 @@ mod tests {
     async fn test_daemon_accepts_and_responds() {
         // Use a temp socket path
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-test-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-test-{}.sock", std::process::id()));
 
         // Start server
         let pid_path = socket_path.with_extension("pid");
@@ -1498,10 +1498,10 @@ mod tests {
     #[tokio::test]
     async fn test_bind_to_creates_socket_parent_dir() {
         let short_id = Uuid::new_v4().simple().to_string();
-        let base_dir =
-            std::path::PathBuf::from("/tmp").join(format!("pilotty-custom-{}", &short_id[..8]));
+        let base_dir = std::path::PathBuf::from("/tmp")
+            .join(format!("agent-terminal-custom-{}", &short_id[..8]));
         let socket_dir = base_dir.join("nested");
-        let socket_path = socket_dir.join("pilotty.sock");
+        let socket_path = socket_dir.join("agent-terminal.sock");
         let pid_path = socket_path.with_extension("pid");
 
         let _ = std::fs::remove_dir_all(&base_dir);
@@ -1522,7 +1522,7 @@ mod tests {
     async fn test_scroll_rejects_large_amount() {
         let short_id = Uuid::new_v4().simple().to_string();
         let socket_path = std::path::PathBuf::from("/tmp")
-            .join(format!("pilotty-scroll-{}.sock", &short_id[..8]));
+            .join(format!("agent-terminal-scroll-{}.sock", &short_id[..8]));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -1577,7 +1577,7 @@ mod tests {
     async fn test_spawn_and_snapshot() {
         // Use a temp socket path
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-snap-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-snap-{}.sock", std::process::id()));
 
         // Start server
         let pid_path = socket_path.with_extension("pid");
@@ -1690,7 +1690,7 @@ mod tests {
     #[tokio::test]
     async fn test_snapshot_full_format() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-full-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-full-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -1812,7 +1812,7 @@ mod tests {
     #[tokio::test]
     async fn test_type_command() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-type-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-type-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -1935,7 +1935,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_command() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-key-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-key-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2042,7 +2042,7 @@ mod tests {
     async fn test_key_rejects_large_delay() {
         let short_id = Uuid::new_v4().simple().to_string();
         let socket_path = std::path::PathBuf::from("/tmp")
-            .join(format!("pilotty-keydelay-{}.sock", &short_id[..8]));
+            .join(format!("agent-terminal-keydelay-{}.sock", &short_id[..8]));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2098,7 +2098,8 @@ mod tests {
     #[tokio::test]
     async fn test_click_command() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-click-{}.sock", std::process::id()));
+        let socket_path =
+            temp_dir.join(format!("agent-terminal-click-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2197,7 +2198,8 @@ mod tests {
         use agent_terminal_core::protocol::ScrollDirection;
 
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-scroll-{}.sock", std::process::id()));
+        let socket_path =
+            temp_dir.join(format!("agent-terminal-scroll-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2306,7 +2308,10 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_plain_text() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-waitfor-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-waitfor-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2401,7 +2406,10 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_regex() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-waitfor-re-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-waitfor-re-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2493,7 +2501,10 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_timeout() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-waitfor-to-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-waitfor-to-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2587,7 +2598,10 @@ mod tests {
     #[tokio::test]
     async fn test_wait_for_invalid_regex() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-waitfor-bad-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-waitfor-bad-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2679,8 +2693,10 @@ mod tests {
     #[tokio::test]
     async fn test_snapshot_await_change_detects_update() {
         let temp_dir = std::env::temp_dir();
-        let socket_path =
-            temp_dir.join(format!("pilotty-await-change-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-await-change-{}.sock",
+            std::process::id()
+        ));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2847,7 +2863,7 @@ mod tests {
     #[tokio::test]
     async fn test_spawn_with_invalid_cwd_fails() {
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-cwd-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-cwd-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
@@ -2922,7 +2938,7 @@ mod tests {
         use agent_terminal_core::elements::ElementKind;
 
         let temp_dir = std::env::temp_dir();
-        let socket_path = temp_dir.join(format!("pilotty-elem-{}.sock", std::process::id()));
+        let socket_path = temp_dir.join(format!("agent-terminal-elem-{}.sock", std::process::id()));
         let pid_path = socket_path.with_extension("pid");
 
         let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())

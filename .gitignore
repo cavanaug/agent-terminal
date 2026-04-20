@@ -30,7 +30,7 @@ TODO*.md
 examples/
 
 # npm - binaries are downloaded during release
-npm/bin/pilotty-*
+npm/bin/agent-terminal-*
 npm/node_modules/
 
 # ── GSD baseline (auto-generated) ──

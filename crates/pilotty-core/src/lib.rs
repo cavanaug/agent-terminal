@@ -1,4 +1,4 @@
-//! Core types and logic for pilotty.
+//! Core types and logic for agent-terminal.
 //!
 //! This crate provides shared data structures and algorithms for AI-driven
 //! terminal automation. It's used by both the CLI/daemon and MCP server.
@@ -13,7 +13,7 @@
 //!
 //! # Element Detection
 //!
-//! pilotty detects interactive UI elements using a simplified 3-kind model
+//! agent-terminal detects interactive UI elements using a simplified 3-kind model
 //! optimized for AI agents:
 //!
 //! | Kind | Detection | Confidence |
