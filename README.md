@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/pilotty.png" alt="pilotty - Terminal automation CLI enabling AI agents to control TUI applications" width="400">
+  <img src="assets/agent-terminal.png" alt="agent-terminal - Terminal automation CLI enabling AI agents to control TUI applications" width="400">
 </p>
 
-<h1 align="center">pilotty</h1>
+<h1 align="center">agent-terminal</h1>
 
 <p align="center">
   <sub>The terminal equivalent of <a href="https://github.com/vercel-labs/agent-browser">agent-browser</a></sub>
@@ -10,79 +10,85 @@
 
 <p align="center">
   <strong>Terminal automation CLI for AI agents</strong><br>
-  <em>Control vim, htop, lazygit, dialog, and any TUI programmatically</em>
+  <em>Control vim, htop, lazygit, dialog, and other TUI applications programmatically</em>
 </p>
 
 <p align="center">
   <a href="#installation">Installation</a> •
   <a href="#quick-start">Quick Start</a> •
   <a href="#commands">Commands</a> •
+  <a href="#runtime-and-daemon">Runtime</a> •
   <a href="#usage-with-ai-agents">AI Agents</a>
 </p>
 
 ---
 
 > [!NOTE]
-> **Built with AI, for AI.** This project was built with the support of an AI agent, planned thoroughly with a tight feedback loop and reviewed at each step. While we've tested extensively, edge cases may exist. Use in production at your own discretion, and please [report any issues](https://github.com/cavanaug/pilotty/issues) you find!
+> **Built with AI, for AI.** This project was built with the support of an AI agent, planned thoroughly with a tight feedback loop, and reviewed at each step. While it has been tested extensively, edge cases may still exist. Use it in production with the level of caution you apply to any automation that can drive terminal software.
 
-pilotty enables AI agents to interact with terminal applications through a simple command-line interface. It manages pseudo-terminal (PTY) sessions with full VT100 terminal emulation, captures screen state, and provides keyboard/mouse input for navigating terminal user interfaces. Think of it as headless terminal automation for AI workflows.
+agent-terminal lets AI agents interact with terminal applications through a simple command-line interface. It manages pseudo-terminal (PTY) sessions with VT100 terminal emulation, captures screen state, and provides keyboard and mouse input for navigating terminal user interfaces. Think of it as headless terminal automation for AI workflows.
+
+> [!NOTE]
+> **Origin:** `agent-terminal` is derived from the earlier `pilotty` project, and the mascot artwork also comes from `pilotty`.
 
 ## Features
 
-- **PTY (Pseudo-Terminal) Management**: Spawn and manage terminal applications in background sessions
-- **Terminal Emulation**: Full VT100 emulation for accurate screen capture and state tracking
-- **Render Modes**: Three-tier snapshot fidelity — basic (text only), styled (bold/italic/underline), color (full RGB)
-- **ANSI Text Output**: `--format text` with styled/color mode emits SGR escape sequences that recreate the screen appearance
-- **Keyboard Navigation**: Interact with TUIs using Tab, Enter, arrow keys, and key combos
-- **AI-Friendly Output**: Clean JSON responses with actionable suggestions on errors
-- **Multi-Session**: Run multiple terminal apps simultaneously in isolated sessions
-- **Zero Config**: Daemon auto-starts on first command, auto-stops after 5 minutes idle
+- **PTY session management**: Spawn and manage terminal applications in background sessions.
+- **Terminal emulation**: VT100 emulation for accurate screen capture and state tracking.
+- **Render modes**: `basic`, `styled`, and `color` snapshot fidelity.
+- **ANSI text output**: `snapshot --format text` with styled/color render modes emits ANSI SGR sequences that recreate terminal appearance.
+- **Keyboard-first interaction**: Drive TUIs with `key`, `type`, `wait-for`, `scroll`, and `click` commands.
+- **AI-friendly output**: Structured JSON responses with actionable suggestions on errors.
+- **Multi-session support**: Run multiple terminal apps simultaneously in isolated sessions.
+- **Zero-config daemon**: The daemon auto-starts on first use and auto-stops after 5 minutes idle.
 
-## Why pilotty?
+## Why agent-terminal?
 
-[agent-browser](https://github.com/vercel-labs/agent-browser) by Vercel Labs lets AI agents control web browsers. pilotty does the same for terminals.
-
-**Origin story:** Built to solve a personal problem, pilotty was created to enable AI agents to interact with [OpenTUI](https://github.com/anomalyco/opentui) interfaces and control [OpenCode](https://github.com/anomalyco/opencode) programmatically. If you're building TUIs or working with terminal applications, pilotty lets AI navigate them just like a human would.
+[agent-browser](https://github.com/vercel-labs/agent-browser) gives AI agents a browser automation surface. agent-terminal does the same for terminal apps, which makes it useful for TUIs, curses-style dashboards, interactive CLIs, and editor workflows that do not expose a web UI.
 
 ## Installation
 
-### npm (recommended)
+### GitHub release tarballs (recommended)
 
-Requires Node.js 16+.
+Download the `agent-terminal-<target>.tar.gz` asset for your platform from the latest GitHub Release, then extract and install the binary somewhere on your `PATH`:
 
 ```bash
-npm install -g pilotty
+tar -xzf agent-terminal-<target>.tar.gz
+install -m 0755 agent-terminal ~/.local/bin/agent-terminal
 ```
 
-### cargo install
+The release also includes `agent-terminal-completions.tar.gz` if you prefer to install generated shell completions from the published artifacts.
+
+### Build from source
 
 Requires [Rust](https://rustup.rs) 1.70+.
 
 ```bash
-cargo install pilotty
+git clone <repository-url> agent-terminal
+cd agent-terminal
+cargo build --release -p agent-terminal-cli
+install -m 0755 target/release/agent-terminal ~/.local/bin/agent-terminal
 ```
 
-### From Source
+### Shell completions
 
-Requires [Rust](https://rustup.rs) 1.70+.
+Generate completions from the installed binary:
 
 ```bash
-git clone https://github.com/cavanaug/pilotty
-cd pilotty
-cargo install --path crates/pilotty-cli
+agent-terminal completions bash > ~/.local/share/bash-completion/completions/agent-terminal
+agent-terminal completions zsh > ~/.zfunc/_agent-terminal
+agent-terminal completions fish > ~/.config/fish/completions/agent-terminal.fish
 ```
 
-By default, `cargo install` places the binary in `~/.cargo/bin`, which is added to your `PATH` automatically by rustup. To install elsewhere:
+### npm distribution
+
+npm distribution is intentionally disabled for now. The supported public install paths are GitHub release tarballs, shell completion artifacts, or building the binary from source.
+
+### Verify installation
 
 ```bash
-cargo install --path crates/pilotty-cli --root ~/.local
-```
-
-### Verify Installation
-
-```bash
-pilotty --version
-pilotty --help
+agent-terminal --version
+agent-terminal --help
 ```
 
 ## Platform Support
@@ -95,108 +101,99 @@ pilotty --help
 | Linux | arm64 | ✅ |
 | Windows | - | ❌ Not supported |
 
-Windows is not supported due to the use of Unix domain sockets and POSIX PTY APIs.
+Windows is not currently supported because the daemon/runtime model depends on Unix domain sockets and POSIX PTY APIs.
 
 ## Quick Start
 
 ```bash
 # Spawn a TUI application
-pilotty spawn htop
+agent-terminal spawn htop
 
 # Take a snapshot of the terminal
-pilotty snapshot
+agent-terminal snapshot
 
 # Type text
-pilotty type "hello world"
+agent-terminal type "hello world"
 
 # Send keys
-pilotty key Enter
-pilotty key Ctrl+C
+agent-terminal key Enter
+agent-terminal key Ctrl+C
 
 # Click at specific coordinates (row, col)
-pilotty click 10 5
+agent-terminal click 10 5
 
 # List active sessions
-pilotty list-sessions
+agent-terminal list-sessions
 
 # Stop the daemon
-pilotty stop
+agent-terminal stop
 ```
 
 ## Commands
 
-### Session Management
+### Session management
 
 ```bash
-pilotty spawn <command>           # Spawn a TUI app (e.g., pilotty spawn vim file.txt)
-pilotty spawn --name myapp <cmd>  # Spawn with a custom session name
-pilotty spawn --cwd /path cmd     # Spawn in a specific working directory
-pilotty kill                      # Kill default session
-pilotty kill -s myapp             # Kill specific session
-pilotty list-sessions             # List all active sessions
-pilotty stop                      # Stop the daemon and all sessions
-pilotty daemon                    # Manually start daemon (usually auto-starts)
-pilotty examples                  # Show end-to-end workflow example
+agent-terminal spawn <command>           # Spawn a TUI app (for example, vim file.txt)
+agent-terminal spawn --name myapp <cmd>  # Spawn with a custom session name
+agent-terminal spawn --cwd /path cmd     # Spawn in a specific working directory
+agent-terminal kill                      # Kill default session
+agent-terminal kill -s myapp             # Kill specific session
+agent-terminal list-sessions             # List all active sessions
+agent-terminal stop                      # Stop the daemon and all sessions
+agent-terminal daemon                    # Manually start daemon (usually auto-starts)
+agent-terminal examples                  # Show end-to-end workflow example
 ```
 
-### Screen Capture
+### Screen capture
 
 ```bash
-pilotty snapshot                  # Full JSON with text
-pilotty snapshot --format compact # JSON without text field
-pilotty snapshot --format text    # Plain text with cursor indicator
+agent-terminal snapshot                      # Full JSON with text
+agent-terminal snapshot --format compact     # JSON without text field
+agent-terminal snapshot --format text        # Plain text with cursor indicator
+agent-terminal snapshot -s editor            # Snapshot a specific session
 
 # Render modes control style/color fidelity
-pilotty snapshot --render basic   # Text only
-pilotty snapshot --render styled  # Text attributes (bold, italic, underline, dim, inverse)
-pilotty snapshot --render color   # Full color (default: style_map + color_map)
+agent-terminal snapshot --render basic       # Text only
+agent-terminal snapshot --render styled      # Text attributes (bold, italic, underline, dim, inverse)
+agent-terminal snapshot --render color       # Full color (default: style_map + color_map)
 
-# ANSI text output — visually recreates the terminal screen
-pilotty snapshot --format text --render color   # ANSI-styled text output
-pilotty snapshot --format text --render styled  # Text attributes only, no colors
+# ANSI text output recreates terminal appearance
+agent-terminal snapshot --format text --render color
+agent-terminal snapshot --format text --render styled
 
-# Wait for screen to change before returning (no more manual sleep!)
-pilotty snapshot --await-change $HASH           # Block until hash differs
-pilotty snapshot --await-change $HASH --settle 100  # Then wait for stability
+# Wait for the screen to change before returning
+HASH=$(agent-terminal snapshot | jq -r '.content_hash')
+agent-terminal key Enter
+agent-terminal snapshot --await-change $HASH
+agent-terminal snapshot --await-change $HASH --settle 100
 ```
 
-### Input
+### Input and interaction
 
 ```bash
-pilotty type "hello"              # Type text at cursor
-pilotty key Enter                 # Send Enter key
-pilotty key Ctrl+C                # Send Ctrl+C
-pilotty key Alt+F                 # Send Alt+F
-pilotty key F1                    # Send function key
-pilotty key Tab                   # Send Tab
-pilotty key Escape                # Send Escape
-
-# Key sequences (space-separated keys sent in order)
-pilotty key "Ctrl+X m"            # Emacs chord: Ctrl+X then m
-pilotty key "Escape : w q Enter"  # vim :wq sequence
-pilotty key "a b c" --delay 50    # Send a, b, c with 50ms delay between
+agent-terminal type "hello"
+agent-terminal key Enter
+agent-terminal key Ctrl+C
+agent-terminal key Alt+F
+agent-terminal key F1
+agent-terminal key Tab
+agent-terminal key Escape
+agent-terminal key "Ctrl+X m"
+agent-terminal key "Escape : w q Enter"
+agent-terminal key "a b c" --delay 50
+agent-terminal click 10 5
+agent-terminal scroll up
+agent-terminal scroll down 5
 ```
 
-### Interaction
+### Terminal control
 
 ```bash
-pilotty click 10 5                # Click at row 10, col 5
-pilotty scroll up                 # Scroll up 1 line
-pilotty scroll down 5             # Scroll down 5 lines
-```
-
-### Terminal Control
-
-```bash
-pilotty resize 120 40             # Resize terminal to 120x40
-pilotty wait-for "Ready"          # Wait for text to appear
-pilotty wait-for "Error" --regex  # Wait for regex pattern
-pilotty wait-for "Done" -t 5000   # Wait with 5s timeout
-
-# Wait for screen changes (preferred over sleep)
-HASH=$(pilotty snapshot | jq '.content_hash')
-pilotty key Enter
-pilotty snapshot --await-change $HASH --settle 50  # Wait for change + 50ms stability
+agent-terminal resize 120 40
+agent-terminal wait-for "Ready"
+agent-terminal wait-for "Error" --regex
+agent-terminal wait-for "Done" -t 5000
 ```
 
 ## Snapshot Output
@@ -219,223 +216,40 @@ The `snapshot` command returns structured data about the terminal screen:
 }
 ```
 
-### Render Modes
+### Render modes
 
-The `--render` flag controls how much visual fidelity each snapshot returns. Sessions always capture full style + color data internally, and `pilotty snapshot` defaults to `--render color` unless you override it per request:
+Sessions always capture full style and color data internally, and `agent-terminal snapshot` defaults to `--render color` unless you override it per request.
 
 | Mode | `--format full` (JSON) | `--format text` |
-|------|----------------------|-----------------|
+|------|------------------------|-----------------|
 | `basic` | text + elements | Plain text with cursor indicator |
 | `styled` | text + elements + `style_map` | ANSI text with bold/italic/underline |
 | `color` (default) | text + elements + `style_map` + `color_map` | ANSI text with full color |
 
 ```bash
-# Default full snapshot includes style_map + color_map
-pilotty snapshot
-
-# Override per-snapshot
-pilotty snapshot --render styled
-pilotty snapshot --render basic
+agent-terminal snapshot
+agent-terminal snapshot --render styled
+agent-terminal snapshot --render basic
 ```
 
-### Style Map & Color Map
-
-With `--render styled` or `--render color`, the Full JSON snapshot includes position-based style data:
-
-```json
-{
-  "style_map": [
-    { "r": 0, "c": 0, "l": 9, "s": { "b": true } },
-    { "r": 1, "c": 0, "l": 11, "s": { "i": true, "u": true } }
-  ],
-  "color_map": [
-    { "r": 0, "c": 0, "l": 14, "s": { "fg": 1 } },
-    { "r": 2, "c": 0, "l": 11, "s": { "fg": "#00b4a0" } },
-    { "r": 3, "c": 0, "l": 13, "s": { "bg": "#8000ff" } }
-  ]
-}
-```
-
-Each entry marks a character range: `r` (row), `c` (column), `l` (length), `s` (style attributes).
-
-**Style keys:** `b` (bold), `i` (italic), `d` (dim), `u` (underline), `v` (inverse)
-**Color values:** indexed (0-7), extended (8-255), RGB (`"#rrggbb"`)
-
-`style_map` contains text attributes only. `color_map` contains foreground (`fg`) and background (`bg`) colors. Both omit entries for cells with default styling.
-
-### ANSI Text Output
+### ANSI text output
 
 With `--format text` and `--render styled` or `--render color`, the output contains ANSI SGR escape sequences that recreate the terminal's visual appearance:
 
 ```bash
-# Capture styled terminal output
-pilotty spawn ls --color
-pilotty snapshot --format text --render color
-# Output: ANSI-escaped text that looks like the original terminal when printed
-
-# Pipe to another terminal
-pilotty snapshot -s myapp --format text --render color | less -R
+agent-terminal spawn ls --color
+agent-terminal snapshot --format text --render color
+agent-terminal snapshot -s myapp --format text --render color | less -R
 ```
 
-This is useful for visual inspection, piping to other tools, or verifying what the terminal actually looks like.
+## Runtime and Daemon
 
-## UI Elements (Contextual)
-
-pilotty automatically detects interactive UI elements in terminal applications. Elements provide **read-only context** to help understand UI structure, with position data (row, col) for use with the click command.
-
-**Use keyboard navigation (`pilotty key Tab`, `pilotty key Enter`, `pilotty type "text"`) for reliable TUI interaction** rather than element-based actions, as UI element detection depends on visual patterns that may disappear after interaction.
-
-### Element Kinds
-
-| Kind | Detection Patterns | Confidence |
-|------|-------------------|------------|
-| **button** | Inverse video, `[OK]`, `<Cancel>` | 1.0 / 0.8 |
-| **input** | Cursor position, `____` underscores | 1.0 / 0.6 |
-| **toggle** | `[x]`, `[ ]`, `☑`, `☐` | 1.0 |
-
-### Element Fields
-
-| Field | Description |
-|-------|-------------|
-| `kind` | Element type: `button`, `input`, or `toggle` |
-| `row` | Row position (0-based) |
-| `col` | Column position (0-based) |
-| `width` | Width in terminal cells |
-| `text` | Text content of the element |
-| `confidence` | Detection confidence (0.0-1.0) |
-| `focused` | Whether element has focus (only present if true) |
-| `checked` | Toggle state (only present for toggles) |
-
-### Wait for Screen Changes
-
-The `--await-change` flag solves the fundamental problem of TUI automation: **"How long should I wait after an action?"**
-
-Instead of guessing sleep durations (too short = race condition, too long = slow), wait for the screen to actually change:
-
-```bash
-# Capture baseline hash
-HASH=$(pilotty snapshot | jq '.content_hash')
-
-# Perform action
-pilotty key Enter
-
-# Wait for screen to change (blocks until hash differs)
-pilotty snapshot --await-change $HASH
-
-# Or wait for screen to stabilize (useful for apps that render progressively)
-pilotty snapshot --await-change $HASH --settle 100  # Wait 100ms after last change
-```
-
-**Flags:**
-- `--await-change <HASH>`: Block until `content_hash` differs from this value
-- `--settle <MS>`: After change detected, wait for screen to be stable for this many ms
-- `-t, --timeout <MS>`: Maximum wait time (default: 30000)
-
-**Why this matters:**
-- No more flaky automation due to race conditions
-- No more slow scripts due to conservative sleep values  
-- Works regardless of how fast/slow the target app is
-- The `--settle` flag handles apps that render progressively
-
-### Streaming AI Responses
-
-For AI-powered TUIs that stream responses (opencode, etc.), use longer settle times:
-
-```bash
-HASH=$(pilotty snapshot -s ai | jq -r '.content_hash')
-pilotty type -s ai "explain this code"
-pilotty key -s ai Enter
-
-# Wait for streaming to complete: 3s settle, 60s timeout
-pilotty snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000
-```
-
-- Use `--settle 2000-3000` because AI responses pause between chunks
-- Extend timeout with `-t 60000` for longer generations
-- Long responses may scroll; use `pilotty scroll up` to see the full output
-
-### Manual Change Detection
-
-For manual polling, use `content_hash` directly:
-
-```bash
-# Get initial snapshot
-SNAP1=$(pilotty snapshot)
-HASH1=$(echo "$SNAP1" | jq -r '.content_hash')
-
-# Perform some action
-pilotty key Tab
-
-# Check if screen changed
-SNAP2=$(pilotty snapshot)
-HASH2=$(echo "$SNAP2" | jq -r '.content_hash')
-
-if [ "$HASH1" != "$HASH2" ]; then
-  echo "Screen content changed"
-fi
-```
-
-### Workflow Example
-
-```bash
-# 1. Spawn a TUI with dialog elements
-pilotty spawn dialog --yesno "Continue?" 10 40
-
-# 2. Wait for dialog to render
-pilotty wait-for "Continue"
-
-# 3. Get snapshot with elements (for context)
-pilotty snapshot | jq '.elements'
-# Shows detected buttons, helps understand UI structure
-
-# 4. Navigate and interact with keyboard (reliable approach)
-pilotty key Tab      # Move to next element
-pilotty key Enter    # Activate selected element
-```
-
-## Sessions
-
-Each session is an isolated terminal with its own:
-- PTY (pseudo-terminal)
-- Screen buffer
-- Child process
-
-```bash
-# Run multiple apps (--name must come before the command)
-pilotty spawn --name monitoring htop
-pilotty spawn --name editor vim file.txt
-
-# Run app in a specific directory (useful for project-specific configs)
-pilotty spawn --cwd /path/to/project --name myapp bun src/index.tsx
-
-# Target specific session
-pilotty snapshot -s monitoring
-pilotty key -s editor Ctrl+S
-
-# List all sessions
-pilotty list-sessions
-```
-
-If no `--session` is specified, pilotty uses the default session.
-
-Note: The first session spawned without `--name` is automatically named `default`.
-To run multiple sessions, give each a unique name with `--name`:
-
-```bash
-pilotty spawn --name monitoring htop
-pilotty spawn --name editor vim
-```
-
-> **Important:** The `--name` flag must come **before** the command. Everything after the command is passed as arguments to that command.
-
-## Daemon Architecture
-
-pilotty uses a daemon architecture similar to agent-browser:
+agent-terminal uses a daemon architecture similar to agent-browser:
 
 ```
 ┌─────────────┐     Unix Socket      ┌─────────────────┐
 │   CLI       │ ──────────────────▶  │     Daemon      │
-│  (pilotty)  │     JSON-line        │  (auto-started) │
+│agent-terminal│    JSON-line        │  (auto-started) │
 └─────────────┘                      └─────────────────┘
                                               │
                                      ┌────────┴────────┐
@@ -446,140 +260,89 @@ pilotty uses a daemon architecture similar to agent-browser:
                               └───────────┘     └───────────┘
 ```
 
-- **Auto-start**: Daemon starts automatically on first command
-- **Auto-stop**: Daemon shuts down after 5 minutes with no active sessions
-- **Session cleanup**: Sessions are automatically removed when their process exits
-- **Background**: Runs in background, survives terminal close
-- **Shared state**: Multiple CLI invocations share sessions
-- **Clean shutdown**: `pilotty stop` gracefully terminates all sessions
+- **Auto-start**: The daemon starts automatically on the first command.
+- **Auto-stop**: The daemon shuts down after 5 minutes with no active sessions.
+- **Session cleanup**: Sessions are removed when their child process exits.
+- **Shared state**: Multiple CLI invocations can address the same named session.
+- **Clean shutdown**: `agent-terminal stop` gracefully terminates all sessions.
 
-### Lifecycle
+### Runtime paths
 
-The daemon is designed for zero-maintenance operation:
+The daemon socket directory is resolved in this priority order:
 
-1. **First command** (e.g., `pilotty spawn vim`) starts the daemon automatically
-2. **Session ends** (e.g., vim exits after `:wq`) and the session is cleaned up within 500ms
-3. **Idle timeout**: After 5 minutes with no sessions, the daemon shuts down
-4. **Next command** starts the daemon again automatically
+1. `$AGENT_TERMINAL_SOCKET_DIR/{session}.sock`
+2. `$XDG_RUNTIME_DIR/agent-terminal/{session}.sock`
+3. `~/.agent-terminal/{session}.sock`
+4. `/tmp/agent-terminal/{session}.sock`
 
-This means you never need to manually manage the daemon, it starts when needed and stops when idle.
-
-### Socket Location
-
-The daemon socket is created at (in priority order):
-1. `$PILOTTY_SOCKET_DIR/{session}.sock` (explicit override)
-2. `$XDG_RUNTIME_DIR/pilotty/{session}.sock` (Linux standard)
-3. `~/.pilotty/{session}.sock` (home directory fallback)
-4. `/tmp/pilotty/{session}.sock` (last resort)
-
-## Error Handling
-
-All errors include AI-friendly suggestions:
-
-```json
-{
-  "code": "SESSION_NOT_FOUND",
-  "message": "Session 'abc123' not found",
-  "suggestion": "Run 'pilotty list-sessions' to see available sessions"
-}
-```
-
-## Environment Variables
+Related public environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `PILOTTY_SESSION` | Default session name |
-| `PILOTTY_SOCKET_DIR` | Override socket directory |
-| `RUST_LOG` | Logging level (e.g., `debug`, `info`) |
+| `AGENT_TERMINAL_SESSION` | Default session name |
+| `AGENT_TERMINAL_SOCKET_DIR` | Override socket directory |
+| `RUST_LOG` | Logging level (for example `debug`, `info`) |
+
+### Example daemon-backed workflow
+
+```bash
+# Spawn a TUI in a named session
+agent-terminal spawn --name editor vi /tmp/hello.txt
+
+# Wait for the session to be ready
+agent-terminal wait-for -s editor "hello.txt"
+
+# Capture a baseline hash, then make a change
+HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
+agent-terminal key -s editor i
+agent-terminal type -s editor "Hello from agent-terminal!"
+agent-terminal key -s editor Escape
+
+# Wait for the screen to settle, then save and quit
+agent-terminal snapshot -s editor --await-change "$HASH" --settle 50
+agent-terminal type -s editor ":wq"
+agent-terminal key -s editor Enter
+```
 
 ## Usage with AI Agents
 
-### AI Coding Assistants
+### Just tell the agent to use it
 
-Add the skill to your AI coding assistant for richer context:
+Most coding agents can work directly from the CLI help:
 
-```bash
-npx skills add cavanaug/pilotty
+```text
+Use agent-terminal to interact with vim. Run agent-terminal --help to inspect the available commands first.
 ```
 
-This works with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.
-
-### Just Ask the Agent
-
-The simplest approach - just tell your agent to use it:
-
-```
-Use pilotty to interact with vim. Run pilotty --help to see available commands.
-```
-
-The `--help` output is comprehensive and most agents can figure it out from there.
-
-### AGENTS.md / CLAUDE.md
-
-For more consistent results, add to your project or global instructions file:
+### Add an instruction snippet to AGENTS.md / CLAUDE.md
 
 ```markdown
 ## Terminal Automation
 
-Use `pilotty` for TUI automation. Run `pilotty --help` for all commands.
+Use `agent-terminal` for TUI automation. Run `agent-terminal --help` for the full command list.
 
 Core workflow:
-1. `pilotty spawn <command>` - Start a TUI application
-2. `pilotty snapshot` - Get screen state with cursor position
-3. `pilotty key Tab` / `pilotty type "text"` - Navigate and interact
-4. Re-snapshot after screen changes
+1. `agent-terminal spawn <command>` - Start a TUI application
+2. `agent-terminal snapshot` - Get screen state and capture `content_hash` when needed
+3. `agent-terminal key Tab` / `agent-terminal type "text"` - Navigate and interact
+4. `agent-terminal wait-for` or `snapshot --await-change` - Synchronize instead of sleeping
+5. `agent-terminal list-sessions` / `agent-terminal kill` - Inspect and clean up sessions
 ```
 
-### Example Workflow
-
-```bash
-# 1. Spawn the application
-pilotty spawn vim myfile.txt
-
-# 2. Wait for it to be ready
-pilotty wait-for "myfile.txt"
-
-# 3. Take a snapshot to understand the screen and capture hash
-HASH=$(pilotty snapshot | jq '.content_hash')
-
-# 4. Navigate using keyboard commands
-pilotty key i                    # Enter insert mode
-pilotty type "Hello, World!"
-pilotty key Escape
-
-# 5. Wait for screen to update, then save (no manual sleep needed!)
-pilotty snapshot --await-change $HASH --settle 50
-pilotty key "Escape : w q Enter"  # vim :wq sequence
-
-# 6. Verify vim exited
-pilotty list-sessions
-```
-
-### Example: AI TUI Interaction
+### Example: AI TUI interaction
 
 For AI-powered terminal apps that stream responses:
 
 ```bash
-# 1. Spawn the AI app
-pilotty spawn --name ai opencode
-
-# 2. Wait for prompt
-pilotty wait-for -s ai "Ask anything" -t 15000
-
-# 3. Capture baseline hash, type prompt, submit
-HASH=$(pilotty snapshot -s ai | jq -r '.content_hash')
-pilotty type -s ai "write a haiku about rust"
-pilotty key -s ai Enter
-
-# 4. Wait for streaming response (3s settle, 60s timeout)
-pilotty snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000 --format text
-
-# 5. Scroll up if response is long
-pilotty scroll -s ai up 10
-pilotty snapshot -s ai --format text
-
-# 6. Clean up
-pilotty kill -s ai
+agent-terminal spawn --name ai opencode
+agent-terminal wait-for -s ai "Ask anything" -t 15000
+HASH=$(agent-terminal snapshot -s ai | jq -r '.content_hash')
+agent-terminal type -s ai "write a haiku about rust"
+agent-terminal key -s ai Enter
+agent-terminal snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000 --format text
+agent-terminal scroll -s ai up 10
+agent-terminal snapshot -s ai --format text
+agent-terminal kill -s ai
 ```
 
 ## Key Combinations
@@ -598,35 +361,11 @@ Supported key formats:
 | Combined | `Ctrl+Alt+C` | |
 | Special | `Plus` | Literal `+` character |
 | Aliases | `Return` = `Enter`, `Esc` = `Escape` | |
-| **Sequences** | `"Ctrl+X m"`, `"Escape : w q Enter"` | Space-separated keys |
-
-### Key Sequences
-
-Send multiple keys in order with optional delay between them:
-
-```bash
-# Emacs-style chords
-pilotty key "Ctrl+X Ctrl+S"       # Save in Emacs
-pilotty key "Ctrl+X m"            # Compose mail in Emacs
-
-# vim command sequences
-pilotty key "Escape : w q Enter"  # Save and quit vim
-pilotty key "g g d G"             # Delete entire file in vim
-
-# With inter-key delay (useful for slow TUIs)
-pilotty key "Tab Tab Enter" --delay 100   # Navigate with 100ms between keys
-```
-
-The `--delay` flag specifies milliseconds between keys (max 10000ms, default 0).
+| Sequences | `"Ctrl+X m"`, `"Escape : w q Enter"` | Space-separated keys |
 
 ## Contributing
 
-Contributions welcome! Please:
-
-1. Run `cargo fmt` before committing
-2. Run `cargo clippy --all --all-features` and fix warnings
-3. Add tests for new functionality
-4. Update documentation as needed
+Contributions are welcome. Before opening a change, run the project checks that match your scope (for example `cargo fmt`, `cargo clippy --all --all-features`, targeted tests, and any README/runtime audits touched by your changes).
 
 ## License
 

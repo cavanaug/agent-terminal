@@ -4,6 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RELEASE_WORKFLOW="$PROJECT_DIR/.github/workflows/release.yml"
+README="$PROJECT_DIR/README.md"
+NEW_HERO_ASSET="$PROJECT_DIR/assets/agent-terminal.png"
+OLD_HERO_ASSET="$PROJECT_DIR/assets/pilotty.png"
+ORIGIN_NOTE='> **Origin:** `agent-terminal` is derived from the earlier `pilotty` project, and the mascot artwork also comes from `pilotty`.'
 
 phase() {
   printf '\n==> %s\n' "$1"
@@ -48,28 +52,7 @@ require_path_absent() {
   fi
 }
 
-main() {
-  local mode="${1:-}"
-
-  case "$mode" in
-    ""|--distribution-only)
-      ;;
-    --help|-h)
-      cat <<'EOF'
-Usage: bash tests/verify-docs-release-identity.sh [--distribution-only]
-
-Current checks:
-  --distribution-only   Verify npm release plumbing is disabled while GitHub
-                        tarball + completion release surfaces remain.
-  (default)            Same as --distribution-only for now; T02 expands this.
-EOF
-      exit 0
-      ;;
-    *)
-      die "unknown mode: $mode"
-      ;;
-  esac
-
+check_distribution_identity() {
   phase "Check release workflow exists"
   require_file "$RELEASE_WORKFLOW"
 
@@ -92,9 +75,86 @@ EOF
   phase "Check deleted npm package paths stay absent"
   require_path_absent "$PROJECT_DIR/npm"
   require_path_absent "$PROJECT_DIR/scripts/version-sync.sh"
+}
 
-  phase "Distribution identity audit complete"
-  echo "PASS: npm distribution is disabled and GitHub release artifacts remain intact."
+check_readme_identity() {
+  local readme_without_origin
+  local pilotty_line_count
+  readme_without_origin="$(mktemp "${TMPDIR:-/tmp}/agent-terminal-readme.XXXXXX")"
+
+  phase "Check README and hero asset exist"
+  require_file "$README"
+  require_file "$NEW_HERO_ASSET"
+  require_path_absent "$OLD_HERO_ASSET"
+
+  phase "Check README active identity surfaces"
+  require_contains "$README" '<img src="assets/agent-terminal.png"' "renamed hero asset reference"
+  require_contains "$README" '<h1 align="center">agent-terminal</h1>' "agent-terminal heading"
+  require_contains "$README" 'agent-terminal --help' "help command example"
+  require_contains "$README" 'agent-terminal spawn <command>' "spawn example"
+  require_contains "$README" 'agent-terminal snapshot --await-change $HASH --settle 100' "await-change example"
+  require_contains "$README" 'AGENT_TERMINAL_SESSION' "runtime session env var"
+  require_contains "$README" 'AGENT_TERMINAL_SOCKET_DIR' "runtime socket env var"
+  require_contains "$README" '~/.agent-terminal/{session}.sock' "home runtime path"
+  require_contains "$README" 'npm distribution is intentionally disabled for now.' "no-npm distribution note"
+
+  phase "Check bounded origin note"
+  require_contains "$README" "$ORIGIN_NOTE" "bounded origin note"
+  pilotty_line_count="$(rg -n --fixed-strings 'pilotty' "$README" | wc -l | tr -d ' ')"
+  if [ "$pilotty_line_count" != "1" ]; then
+    rg -n --fixed-strings 'pilotty' "$README" >&2 || true
+    die "expected exactly one README line containing 'pilotty', found ${pilotty_line_count}"
+  fi
+
+  grep -Fv "$ORIGIN_NOTE" "$README" > "$readme_without_origin"
+
+  phase "Check stale branding stays absent outside the origin note"
+  require_absent "$readme_without_origin" 'pilotty' "legacy product naming"
+  require_absent "$readme_without_origin" '_pilotty' "legacy completion naming"
+  require_absent "$readme_without_origin" 'PILOTTY_' "legacy runtime env vars"
+  require_absent "$readme_without_origin" '.pilotty' "legacy runtime path"
+  require_absent "$readme_without_origin" 'cavanaug/pilotty' "legacy repository slug"
+  require_absent "$readme_without_origin" 'assets/pilotty.png' "legacy hero asset path"
+  require_absent "$readme_without_origin" 'npm install -g' "stale npm install guidance"
+
+  rm -f "$readme_without_origin"
+}
+
+main() {
+  local mode="${1:-}"
+
+  case "$mode" in
+    ""|--distribution-only)
+      ;;
+    --help|-h)
+      cat <<'EOF'
+Usage: bash tests/verify-docs-release-identity.sh [--distribution-only]
+
+Modes:
+  --distribution-only   Verify npm release plumbing is disabled while GitHub
+                        tarball + completion release surfaces remain.
+  (default)             Run the distribution checks plus README/asset identity
+                        checks for the public agent-terminal docs surface.
+EOF
+      exit 0
+      ;;
+    *)
+      die "unknown mode: $mode"
+      ;;
+  esac
+
+  check_distribution_identity
+
+  if [ "$mode" = "--distribution-only" ]; then
+    phase "Distribution identity audit complete"
+    echo "PASS: npm distribution is disabled and GitHub release artifacts remain intact."
+    exit 0
+  fi
+
+  check_readme_identity
+
+  phase "Full docs/release identity audit complete"
+  echo "PASS: docs, hero asset, and release surfaces consistently use the agent-terminal identity."
 }
 
 main "$@"
