@@ -1,6 +1,6 @@
 # Session Management
 
-pilotty manages multiple isolated terminal sessions, each running its own TUI application with independent state.
+agent-terminal manages multiple isolated terminal sessions, each running its own TUI application with independent state.
 
 ## CRITICAL: Flag Positioning
 
@@ -8,13 +8,13 @@ pilotty manages multiple isolated terminal sessions, each running its own TUI ap
 
 ```bash
 # CORRECT
-pilotty spawn --name myapp vim file.txt
-pilotty key -s myapp Enter
-pilotty snapshot -s myapp --format text
+agent-terminal spawn --name myapp vim file.txt
+agent-terminal key -s myapp Enter
+agent-terminal snapshot -s myapp --format text
 
-# WRONG - flags after positional args get passed to the command, not pilotty
-pilotty spawn vim file.txt --name myapp   # --name goes to vim, session uses "default"
-pilotty key Enter -s myapp                # -s is ignored, targets wrong session
+# WRONG - flags after positional args get passed to the command, not agent-terminal
+agent-terminal spawn vim file.txt --name myapp   # --name goes to vim, session uses "default"
+agent-terminal key Enter -s myapp                # -s is ignored, targets wrong session
 ```
 
 ---
@@ -33,10 +33,10 @@ Each session has:
 The first spawn without `--name` creates the `default` session:
 
 ```bash
-pilotty spawn htop
+agent-terminal spawn htop
 # Creates session named "default"
 
-pilotty snapshot
+agent-terminal snapshot
 # Snapshots the "default" session
 ```
 
@@ -45,9 +45,9 @@ pilotty snapshot
 Use `--name` for multiple concurrent sessions. **Note:** `--name` must come before the command:
 
 ```bash
-pilotty spawn --name monitoring htop
-pilotty spawn --name editor vim file.txt
-pilotty spawn --name git lazygit
+agent-terminal spawn --name monitoring htop
+agent-terminal spawn --name editor vim file.txt
+agent-terminal spawn --name git lazygit
 ```
 
 ### Session Naming Rules
@@ -62,24 +62,24 @@ Use `-s` or `--session` to target a specific session:
 
 ```bash
 # Snapshot specific session
-pilotty snapshot -s monitoring
+agent-terminal snapshot -s monitoring
 
 # Send key to specific session
-pilotty key -s editor Ctrl+S
+agent-terminal key -s editor Ctrl+S
 
 # Send key in specific session
-pilotty key -s git Enter
+agent-terminal key -s git Enter
 
 # Kill specific session
-pilotty kill -s monitoring
+agent-terminal kill -s monitoring
 ```
 
-Without `-s`, commands target the most recently used session (or `default`).
+Without `-s`, commands target the default session. Set `AGENT_TERMINAL_SESSION` if you want a different default without passing `-s` each time.
 
 ## Listing Sessions
 
 ```bash
-pilotty list-sessions
+agent-terminal list-sessions
 ```
 
 Output:
@@ -98,7 +98,7 @@ Output:
 ### Spawn
 
 ```bash
-pilotty spawn --name myapp my-command arg1 arg2
+agent-terminal spawn --name myapp my-command arg1 arg2
 ```
 
 1. Daemon creates PTY
@@ -123,7 +123,7 @@ When the child process exits:
 ### Manual Kill
 
 ```bash
-pilotty kill -s myapp
+agent-terminal kill -s myapp
 ```
 
 Sends SIGTERM to the child process, then cleans up.
@@ -136,19 +136,19 @@ Run multiple apps and switch between them:
 
 ```bash
 # Start apps (--name before command)
-pilotty spawn --name cpu htop
-pilotty spawn --name io iotop
-pilotty spawn --name net nethogs
+agent-terminal spawn --name cpu htop
+agent-terminal spawn --name io iotop
+agent-terminal spawn --name net nethogs
 
 # Check each
-pilotty snapshot -s cpu --format text
-pilotty snapshot -s io --format text
-pilotty snapshot -s net --format text
+agent-terminal snapshot -s cpu --format text
+agent-terminal snapshot -s io --format text
+agent-terminal snapshot -s net --format text
 
 # Clean up
-pilotty kill -s cpu
-pilotty kill -s io
-pilotty kill -s net
+agent-terminal kill -s cpu
+agent-terminal kill -s io
+agent-terminal kill -s net
 ```
 
 ### Editor + Preview
@@ -157,20 +157,20 @@ Edit a file while watching output:
 
 ```bash
 # Start editor (--name before command)
-pilotty spawn --name editor vim main.py
+agent-terminal spawn --name editor vim main.py
 
 # Start file watcher
-pilotty spawn --name preview watch -n1 python main.py
+agent-terminal spawn --name preview watch -n1 python main.py
 
 # Edit
-pilotty key -s editor i
-pilotty type -s editor "print('hello')"
-pilotty key -s editor Escape
-pilotty type -s editor ":w"
-pilotty key -s editor Enter
+agent-terminal key -s editor i
+agent-terminal type -s editor "print('hello')"
+agent-terminal key -s editor Escape
+agent-terminal type -s editor ":w"
+agent-terminal key -s editor Enter
 
 # Check preview
-pilotty snapshot -s preview --format text
+agent-terminal snapshot -s preview --format text
 ```
 
 ### Pipeline Workflow
@@ -179,19 +179,19 @@ Sequential operations across sessions:
 
 ```bash
 # Setup (--name before command)
-pilotty spawn --name worker bash
+agent-terminal spawn --name worker bash
 
 # Run commands
-pilotty type -s worker "curl -s https://api.example.com > data.json"
-pilotty key -s worker Enter
-pilotty wait-for -s worker "$"  # Wait for prompt
+agent-terminal type -s worker "curl -s https://api.example.com > data.json"
+agent-terminal key -s worker Enter
+agent-terminal wait-for -s worker "$"  # Wait for prompt
 
-pilotty type -s worker "jq '.items[]' data.json"
-pilotty key -s worker Enter
-pilotty wait-for -s worker "$"
+agent-terminal type -s worker "jq '.items[]' data.json"
+agent-terminal key -s worker Enter
+agent-terminal wait-for -s worker "$"
 
 # Get output
-pilotty snapshot -s worker --format text
+agent-terminal snapshot -s worker --format text
 ```
 
 ## Session Isolation
@@ -216,7 +216,7 @@ The daemon manages all sessions:
 The daemon starts automatically on the first command:
 
 ```bash
-pilotty spawn vim  # Starts daemon if not running
+agent-terminal spawn vim  # Starts daemon if not running
 ```
 
 ### Auto-Stop
@@ -226,31 +226,31 @@ After 5 minutes with no active sessions, the daemon shuts down automatically.
 ### Manual Control
 
 ```bash
-pilotty daemon     # Manually start daemon
-pilotty stop       # Stop daemon and all sessions
+agent-terminal daemon     # Manually start daemon
+agent-terminal stop       # Stop daemon and all sessions
 ```
 
-## Socket Location
+## Runtime paths
 
-The daemon creates a Unix socket at (in priority order):
+The daemon resolves its runtime directory in this priority order, then stores per-session socket and PID files there as `{session}.sock` and `{session}.pid`:
 
-1. `$PILOTTY_SOCKET_DIR/pilotty.sock`
-2. `$XDG_RUNTIME_DIR/pilotty/pilotty.sock`
-3. `~/.pilotty/pilotty.sock`
-4. `/tmp/pilotty/pilotty.sock`
+1. `$AGENT_TERMINAL_SOCKET_DIR/{session}.sock`
+2. `$XDG_RUNTIME_DIR/agent-terminal/{session}.sock`
+3. `~/.agent-terminal/{session}.sock`
+4. `/tmp/agent-terminal/{session}.sock`
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `PILOTTY_SESSION` | Default session name for all commands |
-| `PILOTTY_SOCKET_DIR` | Override socket directory |
+| `AGENT_TERMINAL_SESSION` | Default session name for all commands |
+| `AGENT_TERMINAL_SOCKET_DIR` | Override socket directory |
 
 Example:
 
 ```bash
-export PILOTTY_SESSION=editor
-pilotty snapshot  # Targets "editor" session without -s flag
+export AGENT_TERMINAL_SESSION=editor
+agent-terminal snapshot  # Targets "editor" session without -s flag
 ```
 
 ## Error Handling
@@ -261,7 +261,7 @@ pilotty snapshot  # Targets "editor" session without -s flag
 {
   "code": "SESSION_NOT_FOUND",
   "message": "Session 'myapp' not found",
-  "suggestion": "Run 'pilotty list-sessions' to see available sessions"
+  "suggestion": "Run 'agent-terminal list-sessions' to see available sessions"
 }
 ```
 
@@ -279,7 +279,7 @@ Attempting to spawn with a name that's already in use:
 
 ## Best Practices
 
-1. **Put --name before command**: `pilotty spawn --name myapp cmd` (not after)
+1. **Put --name before command**: `agent-terminal spawn --name myapp cmd` (not after)
 2. **Use meaningful names**: `--name editor` is better than `--name s1`
 3. **Clean up when done**: Kill sessions you're finished with
 4. **Don't rely on default**: For multi-session work, always name your sessions

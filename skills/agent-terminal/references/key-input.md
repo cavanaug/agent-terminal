@@ -1,14 +1,14 @@
 # Key Input Reference
 
-Complete reference for key combinations supported by `pilotty key`.
+Complete reference for key combinations supported by `agent-terminal key`.
 
 ## Basic Usage
 
 ```bash
-pilotty key <key>                 # Send single key to default session
-pilotty key -s myapp <key>        # Send to specific session
-pilotty key "key1 key2 key3"      # Send key sequence (space-separated)
-pilotty key "key1 key2" --delay 50  # Sequence with 50ms delay between keys
+agent-terminal key <key>                 # Send single key to default session
+agent-terminal key -s myapp <key>        # Send to specific session
+agent-terminal key "key1 key2 key3"      # Send key sequence (space-separated)
+agent-terminal key "key1 key2" --delay 50  # Sequence with 50ms delay between keys
 ```
 
 ## Named Keys
@@ -125,18 +125,18 @@ Send multiple keys in order with a single command. Keys are space-separated:
 
 ```bash
 # Emacs-style chords
-pilotty key "Ctrl+X Ctrl+S"       # Save file
-pilotty key "Ctrl+X Ctrl+C"       # Exit Emacs
-pilotty key "Ctrl+X m"            # Compose mail
+agent-terminal key "Ctrl+X Ctrl+S"       # Save file
+agent-terminal key "Ctrl+X Ctrl+C"       # Exit Emacs
+agent-terminal key "Ctrl+X m"            # Compose mail
 
 # vim command sequences
-pilotty key "Escape : w q Enter"  # Save and quit
-pilotty key "Escape : q ! Enter"  # Quit without saving
-pilotty key "g g d G"             # Delete entire file
+agent-terminal key "Escape : w q Enter"  # Save and quit
+agent-terminal key "Escape : q ! Enter"  # Quit without saving
+agent-terminal key "g g d G"             # Delete entire file
 
 # Navigation sequences
-pilotty key "Tab Tab Enter"       # Tab twice then Enter
-pilotty key "Down Down Space"     # Move down twice and select
+agent-terminal key "Tab Tab Enter"       # Tab twice then Enter
+agent-terminal key "Down Down Space"     # Move down twice and select
 ```
 
 ### Inter-key Delay
@@ -144,8 +144,8 @@ pilotty key "Down Down Space"     # Move down twice and select
 Use `--delay` for TUIs that need time between keys:
 
 ```bash
-pilotty key "Tab Tab Enter" --delay 100   # 100ms between each key
-pilotty key "F9 Down Enter" --delay 50    # htop kill menu navigation
+agent-terminal key "Tab Tab Enter" --delay 100   # 100ms between each key
+agent-terminal key "F9 Down Enter" --delay 50    # htop kill menu navigation
 ```
 
 | Option | Description |
@@ -169,106 +169,106 @@ pilotty key "F9 Down Enter" --delay 50    # htop kill menu navigation
 ### Dialog/Whiptail
 
 ```bash
-pilotty key Tab       # Move between buttons
-pilotty key Enter     # Activate button
-pilotty key Space     # Toggle checkbox
-pilotty key Escape    # Cancel dialog
+agent-terminal key Tab       # Move between buttons
+agent-terminal key Enter     # Activate button
+agent-terminal key Space     # Toggle checkbox
+agent-terminal key Escape    # Cancel dialog
 ```
 
 ### Vim
 
 ```bash
-pilotty key i         # Insert mode (use pilotty type for text)
-pilotty key Escape    # Normal mode
-pilotty key Ctrl+C    # Also exits insert mode
-pilotty type ":wq"    # Command (then Enter)
-pilotty key Enter
+agent-terminal key i         # Insert mode (use agent-terminal type for text)
+agent-terminal key Escape    # Normal mode
+agent-terminal key Ctrl+C    # Also exits insert mode
+agent-terminal type ":wq"    # Command (then Enter)
+agent-terminal key Enter
 
 # Using sequences for common operations
-pilotty key "Escape : w q Enter"     # Save and quit
-pilotty key "Escape : q ! Enter"     # Force quit
-pilotty key "Escape d d"             # Delete line
-pilotty key "Escape g g"             # Go to top
+agent-terminal key "Escape : w q Enter"     # Save and quit
+agent-terminal key "Escape : q ! Enter"     # Force quit
+agent-terminal key "Escape d d"             # Delete line
+agent-terminal key "Escape g g"             # Go to top
 ```
 
 ### Htop
 
 ```bash
-pilotty key F1        # Help
-pilotty key F2        # Setup
-pilotty key F5        # Tree view
-pilotty key F9        # Kill process
-pilotty key F10       # Quit
-pilotty key q         # Also quit
+agent-terminal key F1        # Help
+agent-terminal key F2        # Setup
+agent-terminal key F5        # Tree view
+agent-terminal key F9        # Kill process
+agent-terminal key F10       # Quit
+agent-terminal key q         # Also quit
 ```
 
 ### Less/More
 
 ```bash
-pilotty key Space     # Page down
-pilotty key b         # Page up
-pilotty key q         # Quit
-pilotty key /         # Search (then type pattern)
-pilotty key n         # Next match
-pilotty key N         # Previous match
+agent-terminal key Space     # Page down
+agent-terminal key b         # Page up
+agent-terminal key q         # Quit
+agent-terminal key /         # Search (then type pattern)
+agent-terminal key n         # Next match
+agent-terminal key N         # Previous match
 ```
 
 ### Nano
 
 ```bash
-pilotty key Ctrl+O    # Save
-pilotty key Ctrl+X    # Exit
-pilotty key Ctrl+K    # Cut line
-pilotty key Ctrl+U    # Paste
-pilotty key Ctrl+W    # Search
+agent-terminal key Ctrl+O    # Save
+agent-terminal key Ctrl+X    # Exit
+agent-terminal key Ctrl+K    # Cut line
+agent-terminal key Ctrl+U    # Paste
+agent-terminal key Ctrl+W    # Search
 
 # Using sequences
-pilotty key "Ctrl+O Enter"    # Save with default filename
-pilotty key "Ctrl+X n"        # Exit without saving (answer 'n' to save prompt)
+agent-terminal key "Ctrl+O Enter"    # Save with default filename
+agent-terminal key "Ctrl+X n"        # Exit without saving (answer 'n' to save prompt)
 ```
 
 ### Tmux (default prefix)
 
 ```bash
-pilotty key Ctrl+B    # Prefix key
+agent-terminal key Ctrl+B    # Prefix key
 # Then send the command key:
-pilotty key c         # New window
-pilotty key n         # Next window
-pilotty key p         # Previous window
-pilotty key d         # Detach
+agent-terminal key c         # New window
+agent-terminal key n         # Next window
+agent-terminal key p         # Previous window
+agent-terminal key d         # Detach
 
 # Using sequences for tmux commands
-pilotty key "Ctrl+B c"    # Prefix + new window
-pilotty key "Ctrl+B n"    # Prefix + next window
-pilotty key "Ctrl+B d"    # Prefix + detach
+agent-terminal key "Ctrl+B c"    # Prefix + new window
+agent-terminal key "Ctrl+B n"    # Prefix + next window
+agent-terminal key "Ctrl+B d"    # Prefix + detach
 ```
 
 ### Readline/Bash
 
 ```bash
-pilotty key Ctrl+A    # Beginning of line
-pilotty key Ctrl+E    # End of line
-pilotty key Ctrl+U    # Clear line
-pilotty key Ctrl+R    # Reverse search
-pilotty key Ctrl+L    # Clear screen
-pilotty key Up        # Previous history
-pilotty key Down      # Next history
+agent-terminal key Ctrl+A    # Beginning of line
+agent-terminal key Ctrl+E    # End of line
+agent-terminal key Ctrl+U    # Clear line
+agent-terminal key Ctrl+R    # Reverse search
+agent-terminal key Ctrl+L    # Clear screen
+agent-terminal key Up        # Previous history
+agent-terminal key Down      # Next history
 ```
 
 ## Case Sensitivity
 
 - Named keys are case-insensitive: `Enter`, `ENTER`, `enter` all work
 - Letter keys with Ctrl/Alt are case-insensitive: `Ctrl+c` = `Ctrl+C`
-- Plain letters: Use `pilotty type` for text, not `pilotty key`
+- Plain letters: Use `agent-terminal type` for text, not `agent-terminal key`
 
 ## Escaping
 
 The `+` character is the modifier separator. To type a literal `+`:
 
 ```bash
-pilotty key Plus      # Sends the + character
+agent-terminal key Plus      # Sends the + character
 # Or use type for text:
-pilotty type "2+2"    # Types "2+2"
+agent-terminal type "2+2"    # Types "2+2"
 ```
 
 ## Troubleshooting
@@ -277,8 +277,8 @@ pilotty type "2+2"    # Types "2+2"
 
 ```bash
 # Check if it's a named key or text
-pilotty key Enter     # Named key
-pilotty type "hello"  # Text input
+agent-terminal key Enter     # Named key
+agent-terminal type "hello"  # Text input
 ```
 
 ### Modifier Not Working
@@ -287,8 +287,8 @@ Some apps intercept modifiers before the terminal sees them. Try:
 
 ```bash
 # Check raw terminal behavior
-pilotty spawn cat
-pilotty key Ctrl+C    # Should show ^C or exit
+agent-terminal spawn cat
+agent-terminal key Ctrl+C    # Should show ^C or exit
 ```
 
 ### Timing Issues
@@ -296,7 +296,7 @@ pilotty key Ctrl+C    # Should show ^C or exit
 Some TUIs need time to process input:
 
 ```bash
-pilotty key F9        # Opens menu
-pilotty wait-for "SIGTERM"  # Wait for menu
-pilotty key Enter     # Then select
+agent-terminal key F9        # Opens menu
+agent-terminal wait-for "SIGTERM"  # Wait for menu
+agent-terminal key Enter     # Then select
 ```

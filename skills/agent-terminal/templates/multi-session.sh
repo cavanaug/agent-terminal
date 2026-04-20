@@ -17,9 +17,9 @@ SESSION_EDITOR="file-editor"
 cleanup() {
   echo ""
   echo "Cleaning up sessions..."
-  pilotty kill -s "$SESSION_SHELL" 2>/dev/null || true
-  pilotty kill -s "$SESSION_MONITOR" 2>/dev/null || true
-  pilotty kill -s "$SESSION_EDITOR" 2>/dev/null || true
+  agent-terminal kill -s "$SESSION_SHELL" 2>/dev/null || true
+  agent-terminal kill -s "$SESSION_MONITOR" 2>/dev/null || true
+  agent-terminal kill -s "$SESSION_EDITOR" 2>/dev/null || true
   echo "Done."
 }
 
@@ -30,50 +30,50 @@ echo ""
 echo "1. Starting sessions..."
 
 # Shell for running commands
-pilotty spawn --name "$SESSION_SHELL" bash
+agent-terminal spawn --name "$SESSION_SHELL" bash
 echo "   Started: $SESSION_SHELL (bash)"
 
 # System monitor (top is more portable than htop)
-pilotty spawn --name "$SESSION_MONITOR" top
+agent-terminal spawn --name "$SESSION_MONITOR" top
 echo "   Started: $SESSION_MONITOR (top)"
 
 # Editor for a temp file
-TEMP_FILE="/tmp/pilotty-demo-$$.txt"
-pilotty spawn --name "$SESSION_EDITOR" vi "$TEMP_FILE"
+TEMP_FILE="/tmp/agent-terminal-demo-$$.txt"
+agent-terminal spawn --name "$SESSION_EDITOR" vi "$TEMP_FILE"
 echo "   Started: $SESSION_EDITOR (vi)"
 
 # Wait for all to be ready
-pilotty wait-for -s "$SESSION_SHELL" '$' -t 5000 || true
-pilotty wait-for -s "$SESSION_MONITOR" "load" -t 5000 || pilotty wait-for -s "$SESSION_MONITOR" "CPU" -t 5000 || true
-pilotty wait-for -s "$SESSION_EDITOR" "~" -t 5000 || true
+agent-terminal wait-for -s "$SESSION_SHELL" '$' -t 5000 || true
+agent-terminal wait-for -s "$SESSION_MONITOR" "load" -t 5000 || agent-terminal wait-for -s "$SESSION_MONITOR" "CPU" -t 5000 || true
+agent-terminal wait-for -s "$SESSION_EDITOR" "~" -t 5000 || true
 
 echo "   All sessions ready"
 
 # --- 2. List active sessions ---
 echo ""
 echo "2. Active sessions:"
-pilotty list-sessions
+agent-terminal list-sessions
 
 # --- 3. Interact with shell ---
 echo ""
 echo "3. Running command in shell session..."
 
-pilotty type -s "$SESSION_SHELL" 'echo "Hello from pilotty multi-session demo"'
-pilotty key -s "$SESSION_SHELL" Enter
+agent-terminal type -s "$SESSION_SHELL" 'echo "Hello from agent-terminal multi-session demo"'
+agent-terminal key -s "$SESSION_SHELL" Enter
 
 # Wait for command to complete
 sleep 0.5
-pilotty wait-for -s "$SESSION_SHELL" '$' -t 5000
+agent-terminal wait-for -s "$SESSION_SHELL" '$' -t 5000
 
 # Capture output
 echo "   Shell output:"
-pilotty snapshot -s "$SESSION_SHELL" --format text | tail -5
+agent-terminal snapshot -s "$SESSION_SHELL" --format text | tail -5
 
 # --- 4. Check monitor ---
 echo ""
 echo "4. Checking system monitor..."
 
-pilotty snapshot -s "$SESSION_MONITOR" --format text | head -10
+agent-terminal snapshot -s "$SESSION_MONITOR" --format text | head -10
 echo "   (truncated)"
 
 # --- 5. Write to editor ---
@@ -81,21 +81,21 @@ echo ""
 echo "5. Writing to editor..."
 
 # Enter insert mode
-pilotty key -s "$SESSION_EDITOR" i
+agent-terminal key -s "$SESSION_EDITOR" i
 
 # Type content
-pilotty type -s "$SESSION_EDITOR" "# Multi-session demo"
-pilotty key -s "$SESSION_EDITOR" Enter
-pilotty type -s "$SESSION_EDITOR" "This file was created by pilotty"
-pilotty key -s "$SESSION_EDITOR" Enter
-pilotty type -s "$SESSION_EDITOR" "Running $(date)"
+agent-terminal type -s "$SESSION_EDITOR" "# Multi-session demo"
+agent-terminal key -s "$SESSION_EDITOR" Enter
+agent-terminal type -s "$SESSION_EDITOR" "This file was created by agent-terminal"
+agent-terminal key -s "$SESSION_EDITOR" Enter
+agent-terminal type -s "$SESSION_EDITOR" "Running $(date)"
 
 # Exit insert mode
-pilotty key -s "$SESSION_EDITOR" Escape
+agent-terminal key -s "$SESSION_EDITOR" Escape
 
 # Save (but don't quit yet)
-pilotty type -s "$SESSION_EDITOR" ":w"
-pilotty key -s "$SESSION_EDITOR" Enter
+agent-terminal type -s "$SESSION_EDITOR" ":w"
+agent-terminal key -s "$SESSION_EDITOR" Enter
 
 echo "   Content written to $TEMP_FILE"
 
@@ -103,21 +103,21 @@ echo "   Content written to $TEMP_FILE"
 echo ""
 echo "6. Running another shell command..."
 
-pilotty type -s "$SESSION_SHELL" "cat $TEMP_FILE"
-pilotty key -s "$SESSION_SHELL" Enter
+agent-terminal type -s "$SESSION_SHELL" "cat $TEMP_FILE"
+agent-terminal key -s "$SESSION_SHELL" Enter
 
 sleep 0.5
-pilotty wait-for -s "$SESSION_SHELL" '$' -t 5000
+agent-terminal wait-for -s "$SESSION_SHELL" '$' -t 5000
 
 echo "   File contents from shell:"
-pilotty snapshot -s "$SESSION_SHELL" --format text | grep -A5 "Multi-session" || true
+agent-terminal snapshot -s "$SESSION_SHELL" --format text | grep -A5 "Multi-session" || true
 
 # --- 7. Close editor ---
 echo ""
 echo "7. Closing editor..."
 
-pilotty type -s "$SESSION_EDITOR" ":q"
-pilotty key -s "$SESSION_EDITOR" Enter
+agent-terminal type -s "$SESSION_EDITOR" ":q"
+agent-terminal key -s "$SESSION_EDITOR" Enter
 
 sleep 0.5
 
@@ -125,7 +125,7 @@ sleep 0.5
 echo ""
 echo "8. Stopping monitor..."
 
-pilotty key -s "$SESSION_MONITOR" q
+agent-terminal key -s "$SESSION_MONITOR" q
 
 sleep 0.5
 
@@ -133,8 +133,8 @@ sleep 0.5
 echo ""
 echo "9. Final shell command..."
 
-pilotty type -s "$SESSION_SHELL" "echo 'Demo complete!'"
-pilotty key -s "$SESSION_SHELL" Enter
+agent-terminal type -s "$SESSION_SHELL" "echo 'Demo complete!'"
+agent-terminal key -s "$SESSION_SHELL" Enter
 
 sleep 0.5
 

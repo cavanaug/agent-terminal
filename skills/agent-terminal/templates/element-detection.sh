@@ -1,13 +1,13 @@
 #!/bin/bash
 # Element Detection Template
-# Demonstrates pilotty's element detection and interaction
+# Demonstrates agent-terminal's element detection and interaction
 #
 # Usage: ./element-detection.sh
 
 set -e
 
 # Configuration
-PILOTTY="${PILOTTY:-pilotty}"
+AGENT_TERMINAL="${AGENT_TERMINAL:-agent-terminal}"
 SESSION="element-demo"
 
 # Colors
@@ -19,7 +19,7 @@ NC='\033[0m'
 
 # Cleanup on exit
 cleanup() {
-    $PILOTTY kill -s "$SESSION" 2>/dev/null || true
+    $AGENT_TERMINAL kill -s "$SESSION" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -31,7 +31,7 @@ echo ""
 # -----------------------------------------------------------------------------
 echo -e "${YELLOW}Step 1: Spawning dialog checklist...${NC}"
 
-$PILOTTY spawn --name "$SESSION" -- dialog --checklist "Select features to enable:" 15 60 5 \
+$AGENT_TERMINAL spawn --name "$SESSION" dialog --checklist "Select features to enable:" 15 60 5 \
     "notifications" "Push notifications" on \
     "darkmode" "Dark mode theme" off \
     "autosave" "Auto-save documents" on \
@@ -46,7 +46,7 @@ sleep 0.5
 echo -e "${YELLOW}Step 2: Getting snapshot with detected elements...${NC}"
 echo ""
 
-SNAPSHOT=$($PILOTTY snapshot -s "$SESSION")
+SNAPSHOT=$($AGENT_TERMINAL snapshot -s "$SESSION")
 
 # Show element summary
 echo -e "${GREEN}Detected elements:${NC}"
@@ -81,13 +81,13 @@ echo -e "${YELLOW}Step 4: Toggling 'darkmode' (currently off)...${NC}"
 HASH1=$(echo "$SNAPSHOT" | jq -r '.content_hash')
 
 # Navigate to darkmode (second option) and toggle
-$PILOTTY key -s "$SESSION" Down >/dev/null  # Move to darkmode
-$PILOTTY key -s "$SESSION" Space >/dev/null # Toggle it
+$AGENT_TERMINAL key -s "$SESSION" Down >/dev/null  # Move to darkmode
+$AGENT_TERMINAL key -s "$SESSION" Space >/dev/null # Toggle it
 
 sleep 0.2
 
 # Get new snapshot and hash
-SNAPSHOT2=$($PILOTTY snapshot -s "$SESSION")
+SNAPSHOT2=$($AGENT_TERMINAL snapshot -s "$SESSION")
 HASH2=$(echo "$SNAPSHOT2" | jq -r '.content_hash')
 
 # Verify change
@@ -121,13 +121,13 @@ echo ""
 # -----------------------------------------------------------------------------
 echo -e "${YELLOW}Step 6: Confirming selection with Enter...${NC}"
 
-$PILOTTY key -s "$SESSION" Enter >/dev/null
+$AGENT_TERMINAL key -s "$SESSION" Enter >/dev/null
 
 sleep 0.3
 
 # Check final state
 echo -e "${GREEN}Final screen state:${NC}"
-$PILOTTY snapshot -s "$SESSION" --format text 2>/dev/null | head -5 || echo "  (dialog closed)"
+$AGENT_TERMINAL snapshot -s "$SESSION" --format text 2>/dev/null | head -5 || echo "  (dialog closed)"
 echo ""
 
 # -----------------------------------------------------------------------------

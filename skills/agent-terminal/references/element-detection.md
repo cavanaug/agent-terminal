@@ -1,10 +1,10 @@
 # Element Detection
 
-pilotty automatically detects interactive UI elements in terminal applications. Elements provide **read-only context** to help agents understand UI structure.
+agent-terminal automatically detects interactive UI elements in terminal applications. Elements provide **read-only context** to help agents understand UI structure.
 
 ## Overview
 
-pilotty analyzes terminal screen content and detects:
+agent-terminal analyzes terminal screen content and detects:
 - **Toggles**: Checkboxes like `[x]`, `[ ]`, `[*]`, `☑`, `☐`
 - **Buttons**: Action elements like `[OK]`, `<Cancel>`, `(Submit)`
 - **Inputs**: Text fields marked by underscores `____` or cursor position
@@ -152,9 +152,9 @@ The hash is computed from the visible screen text content. Use it to:
 - Avoid re-processing unchanged screens
 
 ```bash
-HASH1=$(pilotty snapshot | jq -r '.content_hash')
-pilotty key Tab
-HASH2=$(pilotty snapshot | jq -r '.content_hash')
+HASH1=$(agent-terminal snapshot | jq -r '.content_hash')
+agent-terminal key Tab
+HASH2=$(agent-terminal snapshot | jq -r '.content_hash')
 [ "$HASH1" != "$HASH2" ] && echo "Screen changed"
 ```
 
@@ -166,12 +166,12 @@ Elements tell you WHAT is on screen. Use keyboard to interact:
 
 ```bash
 # See what's on screen
-pilotty snapshot | jq '.elements[] | {kind, text, row, col, checked}'
+agent-terminal snapshot | jq '.elements[] | {kind, text, row, col, checked}'
 
 # Navigate with keyboard
-pilotty key Tab    # Move between elements
-pilotty key Space  # Toggle checkboxes
-pilotty key Enter  # Activate buttons
+agent-terminal key Tab    # Move between elements
+agent-terminal key Space  # Toggle checkboxes
+agent-terminal key Enter  # Activate buttons
 ```
 
 ### 2. Check Confidence Levels
@@ -180,20 +180,20 @@ Higher confidence means more reliable detection:
 
 ```bash
 # Filter to high-confidence elements only
-pilotty snapshot | jq '.elements[] | select(.confidence >= 0.8)'
+agent-terminal snapshot | jq '.elements[] | select(.confidence >= 0.8)'
 ```
 
 ### 3. Find Elements by Content or Position
 
 ```bash
 # Find element by text content
-pilotty snapshot | jq '.elements[] | select(.text | contains("Save"))'
+agent-terminal snapshot | jq '.elements[] | select(.text | contains("Save"))'
 
 # Find element at specific position
-pilotty snapshot | jq '.elements[] | select(.row == 5 and .col == 10)'
+agent-terminal snapshot | jq '.elements[] | select(.row == 5 and .col == 10)'
 
 # Get first toggle
-pilotty snapshot | jq '[.elements[] | select(.kind == "toggle")][0]'
+agent-terminal snapshot | jq '[.elements[] | select(.kind == "toggle")][0]'
 ```
 
 ## Limitations
@@ -216,12 +216,12 @@ pilotty snapshot | jq '[.elements[] | select(.kind == "toggle")][0]'
 
 1. Check if the app uses standard patterns:
    ```bash
-   pilotty snapshot --format text  # View raw screen
+   agent-terminal snapshot --format text  # View raw screen
    ```
 
 2. Look for inverse video (may show elements on button/input):
    ```bash
-   pilotty snapshot | jq '.elements[] | select(.confidence == 1.0)'
+   agent-terminal snapshot | jq '.elements[] | select(.confidence == 1.0)'
    ```
 
 ### Wrong Element Kind
@@ -244,7 +244,7 @@ Element positions may change between snapshots. Track elements by:
 SESSION="form"
 
 # 1. Spawn application
-pilotty spawn --name $SESSION dialog --checklist "Options:" 15 50 4 \
+agent-terminal spawn --name $SESSION dialog --checklist "Options:" 15 50 4 \
     "opt1" "Feature A" on \
     "opt2" "Feature B" off \
     "opt3" "Feature C" on \
@@ -254,27 +254,27 @@ sleep 0.5
 
 # 2. Analyze initial state
 echo "Initial state:"
-pilotty snapshot -s $SESSION | jq '.elements[] | select(.kind == "toggle") | {text, checked}'
+agent-terminal snapshot -s $SESSION | jq '.elements[] | select(.kind == "toggle") | {text, checked}'
 
 # 3. Find unchecked toggles
-UNCHECKED=$(pilotty snapshot -s $SESSION | jq '[.elements[] | select(.kind == "toggle" and .checked == false)] | length')
+UNCHECKED=$(agent-terminal snapshot -s $SESSION | jq '[.elements[] | select(.kind == "toggle" and .checked == false)] | length')
 echo "Unchecked toggles: $UNCHECKED"
 
 # 4. Navigate and toggle opt2
-pilotty key -s $SESSION Down   # Move to opt2
-pilotty key -s $SESSION Space  # Toggle it
+agent-terminal key -s $SESSION Down   # Move to opt2
+agent-terminal key -s $SESSION Space  # Toggle it
 
 # 5. Verify change via content_hash
-HASH1=$(pilotty snapshot -s $SESSION | jq -r '.content_hash')
+HASH1=$(agent-terminal snapshot -s $SESSION | jq -r '.content_hash')
 echo "Hash after toggle: $HASH1"
 
 # 6. Confirm and check final state
-pilotty key -s $SESSION Enter
+agent-terminal key -s $SESSION Enter
 sleep 0.3
 
 echo "Final state:"
-pilotty snapshot -s $SESSION | jq '.elements[] | select(.kind == "toggle") | {text, checked}'
+agent-terminal snapshot -s $SESSION | jq '.elements[] | select(.kind == "toggle") | {text, checked}'
 
 # 7. Cleanup
-pilotty kill -s $SESSION
+agent-terminal kill -s $SESSION
 ```
