@@ -24,24 +24,20 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-            npm_arch: linux-x64
             use_zigbuild: true
           # Linux ARM64 (zigbuild for better glibc compatibility)
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-            npm_arch: linux-arm64
             use_zigbuild: true
           # macOS x86_64
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
-            npm_arch: darwin-x64
           # macOS ARM64 (Apple Silicon)
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
-            npm_arch: darwin-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -98,13 +94,6 @@ jobs:
           name: agent-terminal-${{ matrix.target }}
           path: agent-terminal-${{ matrix.target }}.${{ matrix.archive }}
 
-      # Also upload the raw binary for npm packaging
-      - name: Upload npm binary
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-${{ matrix.npm_arch }}
-          path: target/${{ matrix.target }}/release/agent-terminal
-
   verify-binaries:
     name: Verify Binaries
     needs: build
@@ -115,12 +104,11 @@ jobs:
         with:
           path: artifacts
 
-      - name: Verify all binaries exist and are valid
+      - name: Verify release tarballs and completions exist and are valid
         run: |
           echo "=== Artifact structure ==="
           find artifacts -type f | head -20
 
-          # Expected release tarballs
           EXPECTED_TARBALLS=(
             "agent-terminal-x86_64-unknown-linux-gnu/agent-terminal-x86_64-unknown-linux-gnu.tar.gz"
             "agent-terminal-aarch64-unknown-linux-gnu/agent-terminal-aarch64-unknown-linux-gnu.tar.gz"
@@ -128,16 +116,14 @@ jobs:
             "agent-terminal-aarch64-apple-darwin/agent-terminal-aarch64-apple-darwin.tar.gz"
           )
 
-          # Expected npm binaries
-          EXPECTED_NPM=(
-            "npm-linux-x64/agent-terminal"
-            "npm-linux-arm64/agent-terminal"
-            "npm-darwin-x64/agent-terminal"
-            "npm-darwin-arm64/agent-terminal"
+          EXPECTED_COMPLETIONS=(
+            "agent-terminal-completions/agent-terminal"
+            "agent-terminal-completions/_agent-terminal"
+            "agent-terminal-completions/agent-terminal.fish"
           )
 
-          MIN_TARBALL_SIZE=100000  # 100KB minimum for tarballs
-          MIN_BINARY_SIZE=100000   # 100KB minimum for raw binaries
+          MIN_TARBALL_SIZE=100000
+          MIN_COMPLETION_SIZE=10
           ERRORS=0
 
           echo ""
@@ -159,16 +145,16 @@ jobs:
           done
 
           echo ""
-          echo "=== Checking npm binaries ==="
-          for binary in "${EXPECTED_NPM[@]}"; do
-            path="artifacts/$binary"
+          echo "=== Checking shell completions ==="
+          for completion in "${EXPECTED_COMPLETIONS[@]}"; do
+            path="artifacts/$completion"
             if [ ! -f "$path" ]; then
               echo "ERROR: Missing $path"
               ERRORS=$((ERRORS + 1))
             else
               SIZE=$(stat -c%s "$path" 2>/dev/null || stat -f%z "$path")
-              if [ "$SIZE" -lt "$MIN_BINARY_SIZE" ]; then
-                echo "ERROR: $path is too small ($SIZE bytes, expected >= $MIN_BINARY_SIZE)"
+              if [ "$SIZE" -lt "$MIN_COMPLETION_SIZE" ]; then
+                echo "ERROR: $path is too small ($SIZE bytes, expected >= $MIN_COMPLETION_SIZE)"
                 ERRORS=$((ERRORS + 1))
               else
                 echo "OK: $path ($SIZE bytes)"
@@ -181,7 +167,7 @@ jobs:
             echo "FAILED: $ERRORS artifact issues found"
             exit 1
           fi
-          echo "SUCCESS: All 4 release tarballs and 4 npm binaries present and valid"
+          echo "SUCCESS: All 4 release tarballs and shell completions are present and valid"
 
   release:
     name: Create Release
@@ -198,15 +184,9 @@ jobs:
           pattern: agent-terminal-*
           path: artifacts
 
-      - name: Download completions
-        uses: actions/download-artifact@v4
-        with:
-          name: agent-terminal-completions
-          path: artifacts/completions
-
       - name: Package completions
         run: |
-          cd artifacts/completions
+          cd artifacts/agent-terminal-completions
           tar -czvf ../agent-terminal-completions.tar.gz agent-terminal _agent-terminal agent-terminal.fish
           cd ../..
 
@@ -217,45 +197,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-npm:
-    name: Publish to npm
-    needs: verify-binaries
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Sync version from Cargo.toml to package.json
-        run: ./scripts/version-sync.sh
-
-      - name: Download npm binaries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: npm-*
-          path: npm/bin
-
-      - name: Prepare npm package
-        run: |
-          cd npm/bin
-          # Flatten directory structure and rename binaries
-          # Each artifact is in npm-{os}-{arch}/agent-terminal
-          for dir in npm-*/; do
-            arch=$(basename "$dir" | sed 's/npm-//')
-            mv "$dir/agent-terminal" "agent-terminal-${arch}"
-            chmod +x "agent-terminal-${arch}"
-            rmdir "$dir"
-          done
-          ls -la
-          cd ..
-
-      - name: Publish to npm
-        run: |
-          cd npm
-          npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
