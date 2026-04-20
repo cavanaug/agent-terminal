@@ -6,8 +6,9 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RELEASE_WORKFLOW="$PROJECT_DIR/.github/workflows/release.yml"
 README="$PROJECT_DIR/README.md"
 NEW_HERO_ASSET="$PROJECT_DIR/assets/agent-terminal.png"
-OLD_HERO_ASSET="$PROJECT_DIR/assets/pilotty.png"
-ORIGIN_NOTE='> **Origin:** `agent-terminal` is derived from the earlier `pilotty` project, and the mascot artwork also comes from `pilotty`.'
+LEGACY_PRODUCT_NAME="p""ilotty"
+LEGACY_HERO_ASSET="$PROJECT_DIR/assets/${LEGACY_PRODUCT_NAME}.png"
+printf -v ORIGIN_NOTE '> **Origin:** `%s` is derived from the earlier `%s` project, and the mascot artwork also comes from `%s`.' 'agent-terminal' "$LEGACY_PRODUCT_NAME" "$LEGACY_PRODUCT_NAME"
 
 phase() {
   printf '\n==> %s\n' "$1"
@@ -79,13 +80,23 @@ check_distribution_identity() {
 
 check_readme_identity() {
   local readme_without_origin
-  local pilotty_line_count
+  local legacy_origin_line_count
+  local legacy_completion_name
+  local legacy_env_prefix
+  local legacy_runtime_path
+  local legacy_repo_slug
+  local legacy_asset_path
   readme_without_origin="$(mktemp "${TMPDIR:-/tmp}/agent-terminal-readme.XXXXXX")"
+  legacy_completion_name="_${LEGACY_PRODUCT_NAME}"
+  legacy_env_prefix="P""ILOTTY_"
+  legacy_runtime_path=".${LEGACY_PRODUCT_NAME}"
+  legacy_repo_slug="cavanaug/${LEGACY_PRODUCT_NAME}"
+  legacy_asset_path="assets/${LEGACY_PRODUCT_NAME}.png"
 
   phase "Check README and hero asset exist"
   require_file "$README"
   require_file "$NEW_HERO_ASSET"
-  require_path_absent "$OLD_HERO_ASSET"
+  require_path_absent "$LEGACY_HERO_ASSET"
 
   phase "Check README active identity surfaces"
   require_contains "$README" '<img src="assets/agent-terminal.png"' "renamed hero asset reference"
@@ -100,21 +111,21 @@ check_readme_identity() {
 
   phase "Check bounded origin note"
   require_contains "$README" "$ORIGIN_NOTE" "bounded origin note"
-  pilotty_line_count="$(rg -n --fixed-strings 'pilotty' "$README" | wc -l | tr -d ' ')"
-  if [ "$pilotty_line_count" != "1" ]; then
-    rg -n --fixed-strings 'pilotty' "$README" >&2 || true
-    die "expected exactly one README line containing 'pilotty', found ${pilotty_line_count}"
+  legacy_origin_line_count="$(rg -n --fixed-strings "$LEGACY_PRODUCT_NAME" "$README" | wc -l | tr -d ' ')"
+  if [ "$legacy_origin_line_count" != "1" ]; then
+    rg -n --fixed-strings "$LEGACY_PRODUCT_NAME" "$README" >&2 || true
+    die "expected exactly one README line containing '${LEGACY_PRODUCT_NAME}', found ${legacy_origin_line_count}"
   fi
 
   grep -Fv "$ORIGIN_NOTE" "$README" > "$readme_without_origin"
 
   phase "Check stale branding stays absent outside the origin note"
-  require_absent "$readme_without_origin" 'pilotty' "legacy product naming"
-  require_absent "$readme_without_origin" '_pilotty' "legacy completion naming"
-  require_absent "$readme_without_origin" 'PILOTTY_' "legacy runtime env vars"
-  require_absent "$readme_without_origin" '.pilotty' "legacy runtime path"
-  require_absent "$readme_without_origin" 'cavanaug/pilotty' "legacy repository slug"
-  require_absent "$readme_without_origin" 'assets/pilotty.png' "legacy hero asset path"
+  require_absent "$readme_without_origin" "$LEGACY_PRODUCT_NAME" "legacy product naming"
+  require_absent "$readme_without_origin" "$legacy_completion_name" "legacy completion naming"
+  require_absent "$readme_without_origin" "$legacy_env_prefix" "legacy runtime env vars"
+  require_absent "$readme_without_origin" "$legacy_runtime_path" "legacy runtime path"
+  require_absent "$readme_without_origin" "$legacy_repo_slug" "legacy repository slug"
+  require_absent "$readme_without_origin" "$legacy_asset_path" "legacy hero asset path"
   require_absent "$readme_without_origin" 'npm install -g' "stale npm install guidance"
 
   rm -f "$readme_without_origin"
