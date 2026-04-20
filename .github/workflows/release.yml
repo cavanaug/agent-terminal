@@ -72,7 +72,7 @@ jobs:
       - name: Package for GitHub Release
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czvf ../../../pilotty-${{ matrix.target }}.${{ matrix.archive }} pilotty
+          tar -czvf ../../../agent-terminal-${{ matrix.target }}.${{ matrix.archive }} agent-terminal
           cd ../../..
 
       # Generate shell completions from native builds only (completions are arch-independent)
@@ -80,30 +80,30 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           mkdir -p completions
-          BINARY=target/${{ matrix.target }}/release/pilotty
-          $BINARY completions bash > completions/pilotty.bash
-          $BINARY completions zsh > completions/_pilotty
-          $BINARY completions fish > completions/pilotty.fish
+          BINARY=target/${{ matrix.target }}/release/agent-terminal
+          $BINARY completions bash > completions/agent-terminal
+          $BINARY completions zsh > completions/_agent-terminal
+          $BINARY completions fish > completions/agent-terminal.fish
 
       - name: Upload completions artifact
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         uses: actions/upload-artifact@v4
         with:
-          name: completions
+          name: agent-terminal-completions
           path: completions/
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pilotty-${{ matrix.target }}
-          path: pilotty-${{ matrix.target }}.${{ matrix.archive }}
+          name: agent-terminal-${{ matrix.target }}
+          path: agent-terminal-${{ matrix.target }}.${{ matrix.archive }}
 
       # Also upload the raw binary for npm packaging
       - name: Upload npm binary
         uses: actions/upload-artifact@v4
         with:
           name: npm-${{ matrix.npm_arch }}
-          path: target/${{ matrix.target }}/release/pilotty
+          path: target/${{ matrix.target }}/release/agent-terminal
 
   verify-binaries:
     name: Verify Binaries
@@ -122,18 +122,18 @@ jobs:
 
           # Expected release tarballs
           EXPECTED_TARBALLS=(
-            "pilotty-x86_64-unknown-linux-gnu/pilotty-x86_64-unknown-linux-gnu.tar.gz"
-            "pilotty-aarch64-unknown-linux-gnu/pilotty-aarch64-unknown-linux-gnu.tar.gz"
-            "pilotty-x86_64-apple-darwin/pilotty-x86_64-apple-darwin.tar.gz"
-            "pilotty-aarch64-apple-darwin/pilotty-aarch64-apple-darwin.tar.gz"
+            "agent-terminal-x86_64-unknown-linux-gnu/agent-terminal-x86_64-unknown-linux-gnu.tar.gz"
+            "agent-terminal-aarch64-unknown-linux-gnu/agent-terminal-aarch64-unknown-linux-gnu.tar.gz"
+            "agent-terminal-x86_64-apple-darwin/agent-terminal-x86_64-apple-darwin.tar.gz"
+            "agent-terminal-aarch64-apple-darwin/agent-terminal-aarch64-apple-darwin.tar.gz"
           )
 
           # Expected npm binaries
           EXPECTED_NPM=(
-            "npm-linux-x64/pilotty"
-            "npm-linux-arm64/pilotty"
-            "npm-darwin-x64/pilotty"
-            "npm-darwin-arm64/pilotty"
+            "npm-linux-x64/agent-terminal"
+            "npm-linux-arm64/agent-terminal"
+            "npm-darwin-x64/agent-terminal"
+            "npm-darwin-arm64/agent-terminal"
           )
 
           MIN_TARBALL_SIZE=100000  # 100KB minimum for tarballs
@@ -195,19 +195,19 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: pilotty-*
+          pattern: agent-terminal-*
           path: artifacts
 
       - name: Download completions
         uses: actions/download-artifact@v4
         with:
-          name: completions
+          name: agent-terminal-completions
           path: artifacts/completions
 
       - name: Package completions
         run: |
           cd artifacts/completions
-          tar -czvf ../pilotty-completions.tar.gz pilotty.bash _pilotty pilotty.fish
+          tar -czvf ../agent-terminal-completions.tar.gz agent-terminal _agent-terminal agent-terminal.fish
           cd ../..
 
       - name: Create Release
@@ -243,11 +243,11 @@ jobs:
         run: |
           cd npm/bin
           # Flatten directory structure and rename binaries
-          # Each artifact is in npm-{os}-{arch}/pilotty
+          # Each artifact is in npm-{os}-{arch}/agent-terminal
           for dir in npm-*/; do
             arch=$(basename "$dir" | sed 's/npm-//')
-            mv "$dir/pilotty" "pilotty-${arch}"
-            chmod +x "pilotty-${arch}"
+            mv "$dir/agent-terminal" "agent-terminal-${arch}"
+            chmod +x "agent-terminal-${arch}"
             rmdir "$dir"
           done
           ls -la

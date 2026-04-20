@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Round-trip ANSI fidelity test.
 #
-# Proves that pilotty's ANSI text output is faithful: a terminal emulator
+# Proves that agent-terminal's ANSI text output is faithful: a terminal emulator
 # (vt100) can parse it back into equivalent screen state.
 #
 # Pipeline:
@@ -10,28 +10,24 @@
 #   3. Strip header line from text output
 #   4. Spawn session B displaying the stripped ANSI text
 #   5. Capture Full JSON snapshot of session B
-#   6. Compare style_map and color_map between A and B
+#   6. Compare text, style_map, and color_map between A and B
 #
-# Requirements: bash, jq, cargo (builds pilotty if needed)
+# Requirements: bash, jq, cargo
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE="$SCRIPT_DIR/fixtures/roundtrip.ansi"
-PILOTTY="$PROJECT_DIR/target/debug/pilotty"
-
-# Temp directory for intermediate files
-TMPDIR="$(mktemp -d)"
-trap 'cleanup' EXIT
-
+BIN="$PROJECT_DIR/target/debug/agent-terminal"
+TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agent-terminal-roundtrip.XXXXXX")"
+WORK_DIR="$TMP_ROOT/work"
+HOME_DIR="$TMP_ROOT/home"
 SRC_SESSION="roundtrip-src-$$"
 DST_SESSION="roundtrip-dst-$$"
+mkdir -p "$WORK_DIR" "$HOME_DIR"
 
-cleanup() {
-    # Kill sessions (ignore errors if already dead)
-    "$PILOTTY" kill -s "$SRC_SESSION" 2>/dev/null || true
-    "$PILOTTY" kill -s "$DST_SESSION" 2>/dev/null || true
-    rm -rf "$TMPDIR"
+phase() {
+    printf '\n==> %s\n' "$1"
 }
 
 die() {
@@ -39,103 +35,137 @@ die() {
     exit 1
 }
 
-# --- Build ---
-echo "Building pilotty..."
-(cd "$PROJECT_DIR" && cargo build 2>&1) || die "cargo build failed"
+run_agent() {
+    env -u AGENT_TERMINAL_SESSION \
+        -u AGENT_TERMINAL_SOCKET_DIR \
+        HOME="$HOME_DIR" \
+        XDG_RUNTIME_DIR= \
+        "$BIN" "$@"
+}
 
-# --- Check fixture exists ---
+validate_screen_state() {
+    local path="$1"
+    local label="$2"
+
+    jq -e '
+        .type == "screen_state"
+        and (.text | type == "array")
+        and (.style_map | type == "array")
+        and (.color_map | type == "array")
+    ' "$path" > /dev/null || die "$label is not a valid screen_state snapshot"
+}
+
+cleanup() {
+    local exit_code=$?
+    trap - EXIT
+
+    run_agent kill -s "$SRC_SESSION" >/dev/null 2>&1 || true
+    run_agent kill -s "$DST_SESSION" >/dev/null 2>&1 || true
+    run_agent stop >/dev/null 2>&1 || true
+
+    if [ "$exit_code" -eq 0 ]; then
+        rm -rf "$TMP_ROOT"
+    else
+        echo "Preserving failed round-trip temp dir: $TMP_ROOT" >&2
+    fi
+
+    exit "$exit_code"
+}
+trap cleanup EXIT
+
+phase "Build debug binary"
+(cd "$PROJECT_DIR" && cargo build) || die "cargo build failed"
+
+phase "Assert renamed debug binary is the proof surface"
+[ -x "$BIN" ] || die "Missing debug binary: $BIN"
+
+phase "Check tracked ANSI fixture"
 [ -f "$FIXTURE" ] || die "Missing fixture: $FIXTURE"
 
-# --- Step 1: Spawn session A with the ANSI fixture ---
-echo "Spawning source session..."
-"$PILOTTY" spawn --name "$SRC_SESSION" --render color -- bash -c "cat '$FIXTURE'; sleep 60" \
-    || die "Failed to spawn source session"
+phase "Spawn source session"
+spawn_source_output="$(run_agent spawn --name "$SRC_SESSION" -- bash -lc "cat '$FIXTURE'; sleep 60")"
+printf '%s\n' "$spawn_source_output"
+printf '%s' "$spawn_source_output" | grep -q '"type": "session_created"' \
+    || die "Source spawn did not return session_created"
 
-# Give the PTY time to render
-sleep 0.5
+wait_source_output="$(run_agent wait-for -s "$SRC_SESSION" -t 5000 "Bold text")"
+printf '%s\n' "$wait_source_output"
+printf '%s' "$wait_source_output" | grep -q '"found": true' \
+    || die "Source wait-for did not observe rendered fixture text"
 
-# --- Step 2: Capture snapshots from session A ---
-echo "Capturing source snapshots..."
-"$PILOTTY" snapshot -s "$SRC_SESSION" --format full --render color > "$TMPDIR/full-A.json" \
+phase "Capture source snapshots"
+run_agent snapshot -s "$SRC_SESSION" --format full --render color > "$WORK_DIR/full-A.json" \
     || die "Failed to capture full snapshot A"
-"$PILOTTY" snapshot -s "$SRC_SESSION" --format text --render color > "$TMPDIR/text-A.txt" \
+run_agent snapshot -s "$SRC_SESSION" --format text --render color > "$WORK_DIR/text-A.txt" \
     || die "Failed to capture text snapshot A"
 
-# Verify we got style_map data
-jq -e '.style_map | length > 0' "$TMPDIR/full-A.json" > /dev/null \
+validate_screen_state "$WORK_DIR/full-A.json" "Source snapshot"
+[ -s "$WORK_DIR/text-A.txt" ] || die "Source text snapshot was empty"
+jq -e '.style_map | length > 0' "$WORK_DIR/full-A.json" > /dev/null \
     || die "Source snapshot has no style_map entries"
 
-# --- Step 3: Strip header line, cursor markers, trailing whitespace, trailing blank lines ---
-# Header is the first line matching "--- Terminal ... ---"
-# Cursor markers [X] → X (preserve the wrapped character to maintain segment lengths)
-# Trailing whitespace per line and trailing blank lines are removed
-# Final trailing newline is removed to prevent cat from scrolling an N-row PTY
-sed '1{/^--- /d}' "$TMPDIR/text-A.txt" \
+phase "Prepare stripped ANSI replay"
+sed '1{/^--- /d}' "$WORK_DIR/text-A.txt" \
     | sed 's/\[\(.\)\]/\1/g' \
     | sed 's/[[:space:]]*$//' \
     | sed -e :a -e '/^\n*$/{$d;N;ba}' \
-    > "$TMPDIR/stripped-A.txt"
+    > "$WORK_DIR/stripped-A.txt"
 
-# Remove final trailing newline — cat of N lines into N-row PTY scrolls otherwise
-perl -pi -e 'chomp if eof' "$TMPDIR/stripped-A.txt"
+perl -pi -e 'chomp if eof' "$WORK_DIR/stripped-A.txt"
 
-echo "Stripped text output: $(wc -l < "$TMPDIR/stripped-A.txt") lines"
+echo "Stripped text output: $(wc -l < "$WORK_DIR/stripped-A.txt") lines"
 
-# --- Step 4: Spawn session B with the stripped ANSI text ---
-echo "Spawning destination session..."
-"$PILOTTY" spawn --name "$DST_SESSION" --render color -- bash -c "cat '$TMPDIR/stripped-A.txt'; sleep 60" \
-    || die "Failed to spawn destination session"
+phase "Spawn destination session"
+spawn_destination_output="$(run_agent spawn --name "$DST_SESSION" -- bash -lc "cat '$WORK_DIR/stripped-A.txt'; sleep 60")"
+printf '%s\n' "$spawn_destination_output"
+printf '%s' "$spawn_destination_output" | grep -q '"type": "session_created"' \
+    || die "Destination spawn did not return session_created"
 
-sleep 0.5
+wait_destination_output="$(run_agent wait-for -s "$DST_SESSION" -t 5000 "Bold text")"
+printf '%s\n' "$wait_destination_output"
+printf '%s' "$wait_destination_output" | grep -q '"found": true' \
+    || die "Destination wait-for did not observe replayed text"
 
-# --- Step 5: Capture full snapshot from session B ---
-echo "Capturing destination snapshot..."
-"$PILOTTY" snapshot -s "$DST_SESSION" --format full --render color > "$TMPDIR/full-B.json" \
+phase "Capture destination snapshot"
+run_agent snapshot -s "$DST_SESSION" --format full --render color > "$WORK_DIR/full-B.json" \
     || die "Failed to capture full snapshot B"
+validate_screen_state "$WORK_DIR/full-B.json" "Destination snapshot"
 
-# --- Step 6: Compare style_map and color_map ---
-echo "Comparing style maps..."
+phase "Compare round-trip state"
+jq -S '.style_map // [] | sort_by(.r, .c)' "$WORK_DIR/full-A.json" > "$WORK_DIR/style-A.json"
+jq -S '.style_map // [] | sort_by(.r, .c)' "$WORK_DIR/full-B.json" > "$WORK_DIR/style-B.json"
 
-# Extract and sort style_map entries by (r, c) for stable comparison
-jq -S '.style_map // [] | sort_by(.r, .c)' "$TMPDIR/full-A.json" > "$TMPDIR/style-A.json"
-jq -S '.style_map // [] | sort_by(.r, .c)' "$TMPDIR/full-B.json" > "$TMPDIR/style-B.json"
+jq -S '.color_map // [] | sort_by(.r, .c)' "$WORK_DIR/full-A.json" > "$WORK_DIR/color-A.json"
+jq -S '.color_map // [] | sort_by(.r, .c)' "$WORK_DIR/full-B.json" > "$WORK_DIR/color-B.json"
 
-# Extract and sort color_map entries
-jq -S '.color_map // [] | sort_by(.r, .c)' "$TMPDIR/full-A.json" > "$TMPDIR/color-A.json"
-jq -S '.color_map // [] | sort_by(.r, .c)' "$TMPDIR/full-B.json" > "$TMPDIR/color-B.json"
-
-# Compare text content (rows from the .text field, trimmed)
-jq -r '.text // ""' "$TMPDIR/full-A.json" | sed 's/[[:space:]]*$//' > "$TMPDIR/text-content-A.txt"
-jq -r '.text // ""' "$TMPDIR/full-B.json" | sed 's/[[:space:]]*$//' > "$TMPDIR/text-content-B.txt"
+jq -r '.text // [] | sort_by(.r) | .[].t' "$WORK_DIR/full-A.json" | sed 's/[[:space:]]*$//' > "$WORK_DIR/text-content-A.txt"
+jq -r '.text // [] | sort_by(.r) | .[].t' "$WORK_DIR/full-B.json" | sed 's/[[:space:]]*$//' > "$WORK_DIR/text-content-B.txt"
 
 PASS=true
 
-# Compare text content
-if ! diff -u "$TMPDIR/text-content-A.txt" "$TMPDIR/text-content-B.txt" > "$TMPDIR/text-diff.txt" 2>&1; then
+if ! diff -u "$WORK_DIR/text-content-A.txt" "$WORK_DIR/text-content-B.txt" > "$WORK_DIR/text-diff.txt" 2>&1; then
     echo "TEXT MISMATCH:"
-    cat "$TMPDIR/text-diff.txt"
+    cat "$WORK_DIR/text-diff.txt"
     PASS=false
 else
     echo "  Text content: MATCH"
 fi
 
-# Compare style_map
-if ! diff -u "$TMPDIR/style-A.json" "$TMPDIR/style-B.json" > "$TMPDIR/style-diff.txt" 2>&1; then
+if ! diff -u "$WORK_DIR/style-A.json" "$WORK_DIR/style-B.json" > "$WORK_DIR/style-diff.txt" 2>&1; then
     echo "STYLE MAP MISMATCH:"
-    cat "$TMPDIR/style-diff.txt"
+    cat "$WORK_DIR/style-diff.txt"
     PASS=false
 else
-    STYLE_COUNT=$(jq 'length' "$TMPDIR/style-A.json")
+    STYLE_COUNT=$(jq 'length' "$WORK_DIR/style-A.json")
     echo "  Style map: MATCH ($STYLE_COUNT entries)"
 fi
 
-# Compare color_map
-if ! diff -u "$TMPDIR/color-A.json" "$TMPDIR/color-B.json" > "$TMPDIR/color-diff.txt" 2>&1; then
+if ! diff -u "$WORK_DIR/color-A.json" "$WORK_DIR/color-B.json" > "$WORK_DIR/color-diff.txt" 2>&1; then
     echo "COLOR MAP MISMATCH:"
-    cat "$TMPDIR/color-diff.txt"
+    cat "$WORK_DIR/color-diff.txt"
     PASS=false
 else
-    COLOR_COUNT=$(jq 'length' "$TMPDIR/color-A.json")
+    COLOR_COUNT=$(jq 'length' "$WORK_DIR/color-A.json")
     echo "  Color map: MATCH ($COLOR_COUNT entries)"
 fi
 
