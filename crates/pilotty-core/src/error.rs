@@ -132,7 +132,8 @@ impl ApiError {
             code: ErrorCode::CommandFailed,
             message: format!("Maximum session limit ({}) reached", max),
             suggestion: Some(
-                "Kill an existing session with 'agent-terminal kill' before creating a new one".into(),
+                "Kill an existing session with 'agent-terminal kill' before creating a new one"
+                    .into(),
             ),
         }
     }

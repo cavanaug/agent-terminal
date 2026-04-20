@@ -519,13 +519,15 @@ async fn handle_request(
             handle_spawn(
                 &request.id,
                 &sessions,
-                command,
-                session_name,
-                cwd,
-                term,
-                colorterm,
-                cols,
-                rows,
+                SpawnRequest {
+                    command,
+                    session_name,
+                    cwd,
+                    term,
+                    colorterm,
+                    cols,
+                    rows,
+                },
             )
             .await
         }
@@ -541,12 +543,14 @@ async fn handle_request(
             handle_snapshot(
                 &request.id,
                 &sessions,
-                session,
-                format,
-                await_change,
-                settle_ms,
-                timeout_ms,
-                render_mode,
+                SnapshotRequest {
+                    session,
+                    format,
+                    await_change,
+                    settle_ms,
+                    timeout_ms,
+                    render_mode,
+                },
             )
             .await
         }
@@ -590,10 +594,7 @@ async fn handle_request(
     }
 }
 
-/// Handle spawn command.
-async fn handle_spawn(
-    request_id: &str,
-    sessions: &SessionManager,
+struct SpawnRequest {
     command: Vec<String>,
     session_name: Option<String>,
     cwd: Option<String>,
@@ -601,7 +602,24 @@ async fn handle_spawn(
     colorterm: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
+}
+
+/// Handle spawn command.
+async fn handle_spawn(
+    request_id: &str,
+    sessions: &SessionManager,
+    request: SpawnRequest,
 ) -> Response {
+    let SpawnRequest {
+        command,
+        session_name,
+        cwd,
+        term,
+        colorterm,
+        cols,
+        rows,
+    } = request;
+
     if command.is_empty() {
         return Response::error(
             request_id,
@@ -612,36 +630,11 @@ async fn handle_spawn(
         );
     }
 
-    // Validate cwd if provided
-    if let Some(ref dir) = cwd {
-        let path = std::path::Path::new(dir);
-        if !path.exists() {
-            return Response::error(
-                request_id,
-                ApiError::invalid_input_with_suggestion(
-                    format!("Working directory '{}' does not exist", dir),
-                    "Provide an existing directory path, or omit --cwd to use the daemon's directory",
-                ),
-            );
-        }
-        if !path.is_dir() {
-            return Response::error(
-                request_id,
-                ApiError::invalid_input_with_suggestion(
-                    format!("'{}' is not a directory", dir),
-                    "The --cwd option requires a directory path, not a file",
-                ),
-            );
-        }
+    if let Err(error) = validate_spawn_cwd(cwd.as_deref()) {
+        return Response::error(request_id, error);
     }
 
-    // Build optional size from cols/rows
-    let size = match (cols, rows) {
-        (Some(c), Some(r)) => Some(TermSize { cols: c, rows: r }),
-        (Some(c), None) => Some(TermSize { cols: c, rows: 24 }),
-        (None, Some(r)) => Some(TermSize { cols: 80, rows: r }),
-        (None, None) => None,
-    };
+    let size = build_spawn_term_size(cols, rows);
 
     match sessions
         .create_session(command.clone(), session_name, size, cwd, term, colorterm)
@@ -661,8 +654,48 @@ async fn handle_spawn(
     }
 }
 
+fn validate_spawn_cwd(cwd: Option<&str>) -> Result<(), ApiError> {
+    let Some(dir) = cwd else {
+        return Ok(());
+    };
+
+    let path = Path::new(dir);
+    if !path.exists() {
+        return Err(ApiError::invalid_input_with_suggestion(
+            format!("Working directory '{}' does not exist", dir),
+            "Provide an existing directory path, or omit --cwd to use the daemon's directory",
+        ));
+    }
+    if !path.is_dir() {
+        return Err(ApiError::invalid_input_with_suggestion(
+            format!("'{}' is not a directory", dir),
+            "The --cwd option requires a directory path, not a file",
+        ));
+    }
+
+    Ok(())
+}
+
+fn build_spawn_term_size(cols: Option<u16>, rows: Option<u16>) -> Option<TermSize> {
+    match (cols, rows) {
+        (Some(c), Some(r)) => Some(TermSize { cols: c, rows: r }),
+        (Some(c), None) => Some(TermSize { cols: c, rows: 24 }),
+        (None, Some(r)) => Some(TermSize { cols: 80, rows: r }),
+        (None, None) => None,
+    }
+}
+
 /// Poll interval for await_change/settle operations.
 const SNAPSHOT_POLL_INTERVAL_MS: u64 = 50;
+
+struct SnapshotRequest {
+    session: Option<String>,
+    format: Option<SnapshotFormat>,
+    await_change: Option<u64>,
+    settle_ms: u64,
+    timeout_ms: u64,
+    render_mode: RenderMode,
+}
 
 /// Handle snapshot command.
 ///
@@ -673,14 +706,18 @@ const SNAPSHOT_POLL_INTERVAL_MS: u64 = 50;
 async fn handle_snapshot(
     request_id: &str,
     sessions: &SessionManager,
-    session: Option<String>,
-    format: Option<SnapshotFormat>,
-    await_change: Option<u64>,
-    settle_ms: u64,
-    timeout_ms: u64,
-    render_mode: RenderMode,
+    request: SnapshotRequest,
 ) -> Response {
     use std::time::{Duration, Instant};
+
+    let SnapshotRequest {
+        session,
+        format,
+        await_change,
+        settle_ms,
+        timeout_ms,
+        render_mode,
+    } = request;
 
     // Resolve session first
     let session_id = match sessions.resolve_session(session.as_deref()).await {

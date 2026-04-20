@@ -124,7 +124,12 @@ impl PtySession {
     ///
     /// `env_overrides` sets environment variables in the child process,
     /// overriding any inherited values (e.g. TERM, COLORTERM).
-    pub fn spawn(command: &[String], size: TermSize, cwd: Option<&str>, env_overrides: &[(String, String)]) -> Result<Self> {
+    pub fn spawn(
+        command: &[String],
+        size: TermSize,
+        cwd: Option<&str>,
+        env_overrides: &[(String, String)],
+    ) -> Result<Self> {
         if command.is_empty() {
             anyhow::bail!("Command cannot be empty");
         }
@@ -661,8 +666,13 @@ mod tests {
     #[tokio::test]
     async fn test_async_pty_handle_resize() {
         // Spawn a shell
-        let session = PtySession::spawn(&["sh".to_string()], TermSize { cols: 80, rows: 24 }, None, &[])
-            .expect("spawn");
+        let session = PtySession::spawn(
+            &["sh".to_string()],
+            TermSize { cols: 80, rows: 24 },
+            None,
+            &[],
+        )
+        .expect("spawn");
 
         let handle = AsyncPtyHandle::new(session).expect("async handle");
 
@@ -731,8 +741,9 @@ mod tests {
     fn test_spawn_with_cwd() {
         // Spawn pwd in /tmp and verify it outputs a path containing "tmp"
         // Note: On macOS, /tmp is a symlink to /private/tmp
-        let session = PtySession::spawn(&["pwd".to_string()], TermSize::default(), Some("/tmp"), &[])
-            .expect("Failed to spawn pwd with cwd");
+        let session =
+            PtySession::spawn(&["pwd".to_string()], TermSize::default(), Some("/tmp"), &[])
+                .expect("Failed to spawn pwd with cwd");
 
         let mut reader = session.reader().expect("Failed to get reader");
 

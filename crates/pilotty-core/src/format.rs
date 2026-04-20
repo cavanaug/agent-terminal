@@ -126,9 +126,7 @@ fn serialize_color(color: &Color) -> Value {
     match color {
         Color::Default => Value::Null,
         Color::Indexed { index } => Value::Number((*index).into()),
-        Color::Rgb { r, g, b } => {
-            Value::String(format!("#{r:02x}{g:02x}{b:02x}"))
-        }
+        Color::Rgb { r, g, b } => Value::String(format!("#{r:02x}{g:02x}{b:02x}")),
     }
 }
 
@@ -610,7 +608,10 @@ mod tests {
         grid.style_range(0, 0, 7, CellStyle::new().with_fg(Color::indexed(1)));
 
         let style_map = build_style_map(&grid);
-        assert!(style_map.is_empty(), "Color-only should not appear in style_map");
+        assert!(
+            style_map.is_empty(),
+            "Color-only should not appear in style_map"
+        );
     }
 
     #[test]
@@ -715,9 +716,7 @@ mod tests {
 
     #[test]
     fn sgr_styled_tier_no_colors() {
-        let style = CellStyle::new()
-            .with_bold(true)
-            .with_fg(Color::indexed(1));
+        let style = CellStyle::new().with_bold(true).with_fg(Color::indexed(1));
         // Styled mode: only text attrs, no color
         assert_eq!(style_to_sgr(&style, RenderMode::Styled), "\x1b[1m");
     }
@@ -861,9 +860,7 @@ mod tests {
             0,
             0,
             4,
-            CellStyle::new()
-                .with_bold(true)
-                .with_fg(Color::indexed(1)),
+            CellStyle::new().with_bold(true).with_fg(Color::indexed(1)),
         );
         let clusters = segment_grid(&grid);
         let out = render_ansi_lines(&clusters, 99, 99, 1, 4, RenderMode::Styled);
@@ -951,14 +948,8 @@ mod tests {
             line.contains("\x1b[0m"),
             "Reset expected between style transitions: {line}"
         );
-        assert!(
-            line.contains("\x1b[1m"),
-            "Bold SGR expected: {line}"
-        );
-        assert!(
-            line.contains("\x1b[3m"),
-            "Italic SGR expected: {line}"
-        );
+        assert!(line.contains("\x1b[1m"), "Bold SGR expected: {line}");
+        assert!(line.contains("\x1b[3m"), "Italic SGR expected: {line}");
     }
 
     #[test]
@@ -968,9 +959,7 @@ mod tests {
             0,
             0,
             5,
-            CellStyle::new()
-                .with_bold(true)
-                .with_fg(Color::indexed(1)),
+            CellStyle::new().with_bold(true).with_fg(Color::indexed(1)),
         );
         let clusters = segment_grid(&grid);
         let out = render_ansi_lines(&clusters, 99, 99, 1, 5, RenderMode::Basic);

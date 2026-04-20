@@ -422,9 +422,6 @@ impl SessionManager {
             .get(id)
             .ok_or_else(|| ApiError::session_not_found(&id.0))?;
 
-        // Use the provided render mode directly
-        let render_mode = render_mode;
-
         // Drain pending PTY output to update terminal state
         session.drain_pty_output().await;
 
