@@ -1,9 +1,9 @@
 [package]
-name = "pilotty-core"
+name = "agent-terminal-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Core types and logic for pilotty"
+description = "Core types and logic for agent-terminal"
 
 [dependencies]
 serde = { workspace = true }

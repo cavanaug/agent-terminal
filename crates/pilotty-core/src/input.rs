@@ -301,7 +301,7 @@ pub fn encode_mouse_click_combined(x: u16, y: u16) -> Vec<u8> {
 /// # Examples
 ///
 /// ```
-/// use pilotty_core::input::parse_key_sequence;
+/// use agent_terminal_core::input::parse_key_sequence;
 ///
 /// // Emacs chord: Ctrl+X then m
 /// let seq = parse_key_sequence("Ctrl+X m", false).unwrap();

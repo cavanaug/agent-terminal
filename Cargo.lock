@@ -3,6 +3,38 @@
 version = 4
 
 [[package]]
+name = "agent-terminal-cli"
+version = "0.1.20260417"
+dependencies = [
+ "agent-terminal-core",
+ "anyhow",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "dirs",
+ "libc",
+ "portable-pty",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "vt100",
+]
+
+[[package]]
+name = "agent-terminal-core"
+version = "0.1.20260417"
+dependencies = [
+ "serde",
+ "serde_json",
+ "unicode-width",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -470,38 +502,6 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-link",
-]
-
-[[package]]
-name = "pilotty-cli"
-version = "0.1.20260417"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "clap_complete",
- "dirs",
- "libc",
- "pilotty-core",
- "portable-pty",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "vt100",
-]
-
-[[package]]
-name = "pilotty-core"
-version = "0.1.20260417"
-dependencies = [
- "serde",
- "serde_json",
- "unicode-width",
 ]
 
 [[package]]

@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
+use agent_terminal_core::protocol::{Request, Response};
 use anyhow::{bail, Context, Result};
-use pilotty_core::protocol::{Request, Response};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::time::timeout;
@@ -163,7 +163,7 @@ impl DaemonClient {
 mod tests {
     use super::*;
     use crate::daemon::server::DaemonServer;
-    use pilotty_core::protocol::Command;
+    use agent_terminal_core::protocol::Command;
 
     #[tokio::test]
     async fn test_client_connects_to_running_daemon() {

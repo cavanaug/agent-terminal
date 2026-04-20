@@ -4,8 +4,8 @@
 //! that can parse ANSI escape sequences from PTY output.
 
 use crate::daemon::pty::TermSize;
-use pilotty_core::elements::grid::{ScreenCell, ScreenGrid};
-use pilotty_core::elements::style::{CellStyle, Color};
+use agent_terminal_core::elements::grid::{ScreenCell, ScreenGrid};
+use agent_terminal_core::elements::style::{CellStyle, Color};
 
 /// Terminal emulator that parses ANSI escape sequences.
 ///

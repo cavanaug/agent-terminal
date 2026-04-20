@@ -4,12 +4,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use agent_terminal_core::error::ApiError;
+use agent_terminal_core::format::{render_ansi_lines, RenderMode};
+use agent_terminal_core::input::encode_mouse_click_combined;
+use agent_terminal_core::protocol::{Command, Request, Response, ResponseData, SnapshotFormat};
+use agent_terminal_core::snapshot::{CursorState, ScreenState, TerminalSize, TextLine};
 use anyhow::{Context, Result};
-use pilotty_core::error::ApiError;
-use pilotty_core::format::{render_ansi_lines, RenderMode};
-use pilotty_core::input::encode_mouse_click_combined;
-use pilotty_core::protocol::{Command, Request, Response, ResponseData, SnapshotFormat};
-use pilotty_core::snapshot::{CursorState, ScreenState, TerminalSize, TextLine};
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{Notify, Semaphore};
@@ -515,7 +515,20 @@ async fn handle_request(
             colorterm,
             cols,
             rows,
-        } => handle_spawn(&request.id, &sessions, command, session_name, cwd, term, colorterm, cols, rows).await,
+        } => {
+            handle_spawn(
+                &request.id,
+                &sessions,
+                command,
+                session_name,
+                cwd,
+                term,
+                colorterm,
+                cols,
+                rows,
+            )
+            .await
+        }
 
         Command::Snapshot {
             session,
@@ -771,7 +784,10 @@ async fn handle_snapshot(
     }
 
     // Phase 3: Take final snapshot with requested format
-    let snapshot = match sessions.get_snapshot_data_with_render_mode(&session_id, with_elements, render_mode).await {
+    let snapshot = match sessions
+        .get_snapshot_data_with_render_mode(&session_id, with_elements, render_mode)
+        .await
+    {
         Ok(data) => data,
         Err(e) => return Response::error(request_id, e),
     };
@@ -780,9 +796,22 @@ async fn handle_snapshot(
     match format {
         SnapshotFormat::Text => {
             let output = if let Some(ref clusters) = snapshot.clusters {
-                render_ansi_lines(clusters, cursor_row, cursor_col, snapshot.size.rows, snapshot.size.cols, render_mode)
+                render_ansi_lines(
+                    clusters,
+                    cursor_row,
+                    cursor_col,
+                    snapshot.size.rows,
+                    snapshot.size.cols,
+                    render_mode,
+                )
             } else {
-                format_text_snapshot(&snapshot.text, cursor_row, cursor_col, snapshot.size, &snapshot.term)
+                format_text_snapshot(
+                    &snapshot.text,
+                    cursor_row,
+                    cursor_col,
+                    snapshot.size,
+                    &snapshot.term,
+                )
             };
             Response::success(
                 request_id,
@@ -794,12 +823,15 @@ async fn handle_snapshot(
         }
         SnapshotFormat::Full => {
             let snapshot_id = sessions.next_snapshot_id();
-            let text_lines: Vec<TextLine> = snapshot.text.lines().enumerate().map(|(i, line)| {
-                TextLine {
+            let text_lines: Vec<TextLine> = snapshot
+                .text
+                .lines()
+                .enumerate()
+                .map(|(i, line)| TextLine {
                     r: i as u16,
                     t: line.trim_end().to_string(),
-                }
-            }).collect();
+                })
+                .collect();
             let screen_state = ScreenState {
                 snapshot_id,
                 size: TerminalSize {
@@ -954,7 +986,7 @@ async fn handle_type(
     text: String,
     session: Option<String>,
 ) -> Response {
-    use pilotty_core::input::encode_text;
+    use agent_terminal_core::input::encode_text;
 
     // Resolve session
     let session_id = match sessions.resolve_session(session.as_deref()).await {
@@ -991,7 +1023,7 @@ async fn handle_key(
     delay_ms: u32,
     session: Option<String>,
 ) -> Response {
-    use pilotty_core::input::parse_key_sequence;
+    use agent_terminal_core::input::parse_key_sequence;
 
     // Validate delay_ms to prevent DoS
     if delay_ms > MAX_KEY_DELAY_MS {
@@ -1114,11 +1146,11 @@ async fn handle_click(
 async fn handle_scroll(
     request_id: &str,
     sessions: &SessionManager,
-    direction: pilotty_core::protocol::ScrollDirection,
+    direction: agent_terminal_core::protocol::ScrollDirection,
     amount: u32,
     session: Option<String>,
 ) -> Response {
-    use pilotty_core::input::encode_scroll;
+    use agent_terminal_core::input::encode_scroll;
 
     if amount > MAX_SCROLL_AMOUNT {
         return Response::error(
@@ -1154,8 +1186,8 @@ async fn handle_scroll(
     }
 
     let dir_str = match direction {
-        pilotty_core::protocol::ScrollDirection::Up => "up",
-        pilotty_core::protocol::ScrollDirection::Down => "down",
+        agent_terminal_core::protocol::ScrollDirection::Up => "up",
+        agent_terminal_core::protocol::ScrollDirection::Down => "down",
     };
 
     debug!(
@@ -1344,8 +1376,8 @@ async fn handle_shutdown(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pilotty_core::error::ErrorCode;
-    use pilotty_core::protocol::Command;
+    use agent_terminal_core::error::ErrorCode;
+    use agent_terminal_core::protocol::Command;
     use std::time::Duration;
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixStream;
@@ -1475,7 +1507,7 @@ mod tests {
         let request = Request {
             id: "scroll-1".to_string(),
             command: Command::Scroll {
-                direction: pilotty_core::protocol::ScrollDirection::Down,
+                direction: agent_terminal_core::protocol::ScrollDirection::Down,
                 amount: MAX_SCROLL_AMOUNT + 1,
                 session: None,
             },
@@ -2125,7 +2157,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_scroll_command() {
-        use pilotty_core::protocol::ScrollDirection;
+        use agent_terminal_core::protocol::ScrollDirection;
 
         let temp_dir = std::env::temp_dir();
         let socket_path = temp_dir.join(format!("pilotty-scroll-{}.sock", std::process::id()));
@@ -2761,7 +2793,10 @@ mod tests {
             );
             // Verify content contains what we typed
             assert!(
-                state.text.as_ref().is_some_and(|lines| lines.iter().any(|line| line.t.contains("hello"))),
+                state
+                    .text
+                    .as_ref()
+                    .is_some_and(|lines| lines.iter().any(|line| line.t.contains("hello"))),
                 "Text should contain 'hello'"
             );
         } else {
@@ -2847,7 +2882,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_snapshot_with_elements() {
-        use pilotty_core::elements::ElementKind;
+        use agent_terminal_core::elements::ElementKind;
 
         let temp_dir = std::env::temp_dir();
         let socket_path = temp_dir.join(format!("pilotty-elem-{}.sock", std::process::id()));

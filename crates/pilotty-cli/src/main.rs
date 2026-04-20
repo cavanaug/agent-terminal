@@ -3,9 +3,11 @@
 mod args;
 mod daemon;
 
+use agent_terminal_core::format::RenderMode;
+use agent_terminal_core::protocol::{
+    Command, Request, ResponseData, ScrollDirection, SnapshotFormat,
+};
 use clap::{CommandFactory, Parser};
-use pilotty_core::format::RenderMode;
-use pilotty_core::protocol::{Command, Request, ResponseData, ScrollDirection, SnapshotFormat};
 use tracing::{error, info};
 use uuid::Uuid;
 

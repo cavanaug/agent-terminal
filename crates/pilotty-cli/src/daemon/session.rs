@@ -9,13 +9,15 @@ use chrono::{DateTime, Utc};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info};
 
-use pilotty_core::elements::classify::{detect, ClassifyContext};
-use pilotty_core::elements::Element;
-use pilotty_core::error::ApiError;
-use pilotty_core::elements::segment::Cluster;
-use pilotty_core::format::{build_color_map, build_style_map, segment_grid, RenderMode, ColorMapEntry, StyleMapEntry};
-use pilotty_core::protocol::SessionInfo;
-use pilotty_core::snapshot::compute_content_hash;
+use agent_terminal_core::elements::classify::{detect, ClassifyContext};
+use agent_terminal_core::elements::segment::Cluster;
+use agent_terminal_core::elements::Element;
+use agent_terminal_core::error::ApiError;
+use agent_terminal_core::format::{
+    build_color_map, build_style_map, segment_grid, ColorMapEntry, RenderMode, StyleMapEntry,
+};
+use agent_terminal_core::protocol::SessionInfo;
+use agent_terminal_core::snapshot::compute_content_hash;
 
 use crate::daemon::pty::{AsyncPtyHandle, PtySession, TermSize};
 use crate::daemon::terminal::TerminalEmulator;
@@ -404,7 +406,8 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
-        self.get_snapshot_data_with_render_mode(id, with_elements, RenderMode::Color).await
+        self.get_snapshot_data_with_render_mode(id, with_elements, RenderMode::Color)
+            .await
     }
 
     /// Get snapshot data with a render_mode filter controlling what style/color data is included.
@@ -642,7 +645,14 @@ mod tests {
 
         // Create a session
         let id = manager
-            .create_session(vec!["cat".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["cat".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create session");
 
@@ -667,7 +677,14 @@ mod tests {
 
         // Create a few sessions
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["echo".to_string(), "1".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create session 1");
 
@@ -718,7 +735,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_session_not_found_error() {
-        use pilotty_core::error::ErrorCode;
+        use agent_terminal_core::error::ErrorCode;
 
         let manager = SessionManager::new();
 
@@ -739,7 +756,14 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["echo".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create session");
 
@@ -774,7 +798,14 @@ mod tests {
         let manager = SessionManager::new();
 
         let id = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["echo".to_string(), "1".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create default session");
 
@@ -785,7 +816,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_session_no_sessions_error() {
-        use pilotty_core::error::ErrorCode;
+        use agent_terminal_core::error::ErrorCode;
 
         let manager = SessionManager::new();
 
@@ -866,12 +897,26 @@ mod tests {
         let manager = SessionManager::new();
 
         let _id1 = manager
-            .create_session(vec!["echo".to_string(), "1".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["echo".to_string(), "1".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create default session");
 
         let result = manager
-            .create_session(vec!["echo".to_string(), "2".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["echo".to_string(), "2".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await;
 
         assert!(result.is_err());
@@ -928,7 +973,14 @@ mod tests {
 
         // Spawn a long-lived process (cat waits for input)
         let _id = manager
-            .create_session(vec!["cat".to_string()], None, None, None, "xterm-256color".into(), None)
+            .create_session(
+                vec!["cat".to_string()],
+                None,
+                None,
+                None,
+                "xterm-256color".into(),
+                None,
+            )
             .await
             .expect("Failed to create session");
 
@@ -976,9 +1028,18 @@ mod tests {
             .await
             .expect("Failed to get snapshot");
 
-        assert!(snapshot.style_map.is_some(), "default snapshot should include style_map");
-        assert!(snapshot.color_map.is_some(), "default snapshot should include color_map");
+        assert!(
+            snapshot.style_map.is_some(),
+            "default snapshot should include style_map"
+        );
+        assert!(
+            snapshot.color_map.is_some(),
+            "default snapshot should include color_map"
+        );
 
-        manager.kill_session(&id).await.expect("Failed to kill session");
+        manager
+            .kill_session(&id)
+            .await
+            .expect("Failed to kill session");
     }
 }

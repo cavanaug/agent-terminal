@@ -1,16 +1,16 @@
 [package]
-name = "pilotty-cli"
+name = "agent-terminal-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CLI and daemon for pilotty"
+description = "CLI and daemon for agent-terminal"
 
 [[bin]]
-name = "pilotty"
+name = "agent-terminal"
 path = "src/main.rs"
 
 [dependencies]
-pilotty-core = { path = "../pilotty-core" }
+agent-terminal-core = { path = "../pilotty-core" }
 
 tokio = { workspace = true }
 clap = { workspace = true }
