@@ -1,4 +1,4 @@
-//! pilotty CLI and daemon entry point.
+//! agent-terminal CLI and daemon entry point.
 
 mod args;
 mod daemon;
@@ -129,7 +129,7 @@ fn run_client_command(cli: Cli) -> anyhow::Result<()> {
             clap_complete::generate(
                 args.shell,
                 &mut Cli::command(),
-                "pilotty",
+                "agent-terminal",
                 &mut std::io::stdout(),
             );
         }

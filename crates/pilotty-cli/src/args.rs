@@ -10,7 +10,7 @@ const SESSION_HELP: &str = "Target session by name or ID [default: default]";
 /// programmatically. Designed for AI agent consumption with structured
 /// JSON output and stable element references.
 #[derive(Debug, Parser)]
-#[command(name = "pilotty", version)]
+#[command(name = "agent-terminal", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -21,11 +21,11 @@ pub enum Commands {
     /// Spawn a new TUI application in a managed PTY session
     #[command(after_help = "\
 Examples:
-  pilotty spawn htop                    # Simple command
-  pilotty spawn vim file.txt            # Command with arguments
-  pilotty spawn --name editor vim       # Named session for easy reference
-  pilotty spawn --cwd /tmp bash         # Start bash in /tmp directory
-  pilotty spawn bash -c 'echo hello'    # Shell command with args")]
+  agent-terminal spawn htop                    # Simple command
+  agent-terminal spawn vim file.txt            # Command with arguments
+  agent-terminal spawn --name editor vim       # Named session for easy reference
+  agent-terminal spawn --cwd /tmp bash         # Start bash in /tmp directory
+  agent-terminal spawn bash -c 'echo hello'    # Shell command with args")]
     Spawn(SpawnArgs),
 
     /// Kill a session and its child process
@@ -34,16 +34,16 @@ Examples:
     /// Get a snapshot of the terminal screen
     #[command(after_help = "\
 Examples:
-  pilotty snapshot                      # Snapshot default session (full JSON)
-  pilotty snapshot --format compact     # JSON without text field
-  pilotty snapshot --format text        # Plain text with cursor indicator
-  pilotty snapshot -s editor            # Snapshot a specific session
+  agent-terminal snapshot                      # Snapshot default session (full JSON)
+  agent-terminal snapshot --format compact     # JSON without text field
+  agent-terminal snapshot --format text        # Plain text with cursor indicator
+  agent-terminal snapshot -s editor            # Snapshot a specific session
 
 Wait for change:
-  HASH=$(pilotty snapshot | jq -r '.content_hash')
-  pilotty key Enter
-  pilotty snapshot --await-change $HASH           # Block until screen changes
-  pilotty snapshot --await-change $HASH --settle 100  # Wait for 100ms stability")]
+  HASH=$(agent-terminal snapshot | jq -r '.content_hash')
+  agent-terminal key Enter
+  agent-terminal snapshot --await-change $HASH           # Block until screen changes
+  agent-terminal snapshot --await-change $HASH --settle 100  # Wait for 100ms stability")]
     Snapshot(SnapshotArgs),
 
     /// Type text at the current cursor position
@@ -51,9 +51,9 @@ Wait for change:
         name = "type",
         after_help = "\
 Examples:
-  pilotty type 'Hello, world!'          # Type literal text
-  pilotty type \"line1\\nline2\"          # Type with newline (shell escaping)
-  pilotty type -s editor ':wq'          # Type in a specific session"
+  agent-terminal type 'Hello, world!'          # Type literal text
+  agent-terminal type \"line1\\nline2\"          # Type with newline (shell escaping)
+  agent-terminal type -s editor ':wq'          # Type in a specific session"
     )]
     Type(TypeArgs),
 
@@ -69,24 +69,24 @@ Key Sequences:
   Space-separated keys are sent in order. Useful for chords like Emacs C-x m.
 
 Examples:
-  pilotty key Enter                     # Press enter
-  pilotty key Ctrl+C                    # Send interrupt signal
-  pilotty key Alt+F                     # Alt+F (often opens File menu)
-  pilotty key \"Ctrl+X m\"                # Emacs chord: Ctrl+X then m
-  pilotty key \"Escape : w q Enter\"      # vim :wq sequence
-  pilotty key \"Ctrl+X Ctrl+S\"           # Emacs save (two combos)
-  pilotty key -s editor Escape          # Send Escape to specific session
-  pilotty key \"a b c\" --delay 50        # Send a, b, c with 50ms delay between")]
+  agent-terminal key Enter                     # Press enter
+  agent-terminal key Ctrl+C                    # Send interrupt signal
+  agent-terminal key Alt+F                     # Alt+F (often opens File menu)
+  agent-terminal key \"Ctrl+X m\"                # Emacs chord: Ctrl+X then m
+  agent-terminal key \"Escape : w q Enter\"      # vim :wq sequence
+  agent-terminal key \"Ctrl+X Ctrl+S\"           # Emacs save (two combos)
+  agent-terminal key -s editor Escape          # Send Escape to specific session
+  agent-terminal key \"a b c\" --delay 50        # Send a, b, c with 50ms delay between")]
     Key(KeyArgs),
 
     /// Click at a specific row and column coordinate
     #[command(after_help = "\
 Click at a specific position in the terminal using 0-indexed coordinates.
-Use 'pilotty snapshot' to see cursor position and terminal dimensions.
+Use 'agent-terminal snapshot' to see cursor position and terminal dimensions.
 
 Examples:
-  pilotty click 10 5                    # Click at row 10, column 5
-  pilotty click -s editor 5 20          # Click in a specific session")]
+  agent-terminal click 10 5                    # Click at row 10, column 5
+  agent-terminal click -s editor 5 20          # Click in a specific session")]
     Click(ClickArgs),
 
     /// Scroll the terminal up or down
@@ -101,10 +101,10 @@ Examples:
     /// Wait for text to appear on screen
     #[command(after_help = "\
 Examples:
-  pilotty wait-for 'Ready'              # Wait for literal text
-  pilotty wait-for -r 'error|warning'   # Wait for regex pattern
-  pilotty wait-for -t 5000 'Done'       # Wait up to 5 seconds
-  pilotty wait-for -s editor '~'        # Wait in specific session")]
+  agent-terminal wait-for 'Ready'              # Wait for literal text
+  agent-terminal wait-for -r 'error|warning'   # Wait for regex pattern
+  agent-terminal wait-for -t 5000 'Done'       # Wait up to 5 seconds
+  agent-terminal wait-for -s editor '~'        # Wait in specific session")]
     WaitFor(WaitForArgs),
 
     /// Show an end-to-end usage example
@@ -113,9 +113,9 @@ Examples:
     /// Generate shell completions
     #[command(after_help = "\
 Examples:
-  pilotty completions bash > ~/.local/share/bash-completion/completions/pilotty
-  pilotty completions zsh > ~/.zfunc/_pilotty
-  pilotty completions fish > ~/.config/fish/completions/pilotty.fish")]
+  agent-terminal completions bash > ~/.local/share/bash-completion/completions/agent-terminal
+  agent-terminal completions zsh > ~/.zfunc/_agent-terminal
+  agent-terminal completions fish > ~/.config/fish/completions/agent-terminal.fish")]
     Completions(CompletionsArgs),
 
     /// Start the daemon process (usually auto-started)
@@ -160,10 +160,16 @@ pub struct SpawnArgs {
 fn parse_geometry(s: &str) -> Result<(u16, u16), String> {
     let parts: Vec<&str> = s.split('x').collect();
     if parts.len() != 2 {
-        return Err(format!("expected COLSxROWS format (e.g. 120x60), got '{s}'"));
+        return Err(format!(
+            "expected COLSxROWS format (e.g. 120x60), got '{s}'"
+        ));
     }
-    let cols: u16 = parts[0].parse().map_err(|_| format!("invalid columns: '{}'", parts[0]))?;
-    let rows: u16 = parts[1].parse().map_err(|_| format!("invalid rows: '{}'", parts[1]))?;
+    let cols: u16 = parts[0]
+        .parse()
+        .map_err(|_| format!("invalid columns: '{}'", parts[0]))?;
+    let rows: u16 = parts[1]
+        .parse()
+        .map_err(|_| format!("invalid rows: '{}'", parts[1]))?;
     if cols == 0 || rows == 0 {
         return Err("columns and rows must be greater than 0".to_string());
     }
@@ -364,38 +370,38 @@ pub const EXAMPLES_TEXT: &str = r#"End-to-end example: Create a file with vi
 This example spawns vi, writes text to a file, saves, and exits.
 
 # 1. Spawn vi to create a new file
-pilotty spawn --name editor vi /tmp/hello.txt
+agent-terminal spawn --name editor vi /tmp/hello.txt
 
 # 2. Wait for vi to start
-pilotty wait-for -s editor "hello.txt"
+agent-terminal wait-for -s editor "hello.txt"
 
 # 3. Press 'i' to enter insert mode
-pilotty key -s editor i
+agent-terminal key -s editor i
 
 # 4. Type some text
-pilotty type -s editor "Hello from pilotty!"
+agent-terminal type -s editor "Hello from agent-terminal!"
 
 # 5. Press Escape to return to normal mode
-pilotty key -s editor Escape
+agent-terminal key -s editor Escape
 
 # 6. Save and quit with :wq
-pilotty type -s editor ":wq"
-pilotty key -s editor Enter
+agent-terminal type -s editor ":wq"
+agent-terminal key -s editor Enter
 
 # 7. Verify the session ended (vi exited)
-pilotty list-sessions
+agent-terminal list-sessions
 
-# The file /tmp/hello.txt now contains "Hello from pilotty!"
+# The file /tmp/hello.txt now contains "Hello from agent-terminal!"
 "#;
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Commands, CliRenderMode};
+    use super::{Cli, CliRenderMode, Commands};
     use clap::Parser;
 
     #[test]
     fn test_spawn_parses_hyphenated_args() {
-        let cli = Cli::parse_from(["pilotty", "spawn", "bash", "-c", "echo hello"]);
+        let cli = Cli::parse_from(["agent-terminal", "spawn", "bash", "-c", "echo hello"]);
 
         match cli.command {
             Commands::Spawn(args) => {
@@ -407,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_defaults_to_color_render_mode() {
-        let cli = Cli::parse_from(["pilotty", "snapshot"]);
+        let cli = Cli::parse_from(["agent-terminal", "snapshot"]);
 
         match cli.command {
             Commands::Snapshot(args) => {
