@@ -49,7 +49,7 @@ impl ApiError {
         Self {
             code: ErrorCode::SessionNotFound,
             message: format!("Session '{}' not found", session_id),
-            suggestion: Some("Run 'pilotty list-sessions' to see available sessions".into()),
+            suggestion: Some("Run 'agent-terminal list-sessions' to see available sessions".into()),
         }
     }
 
@@ -122,7 +122,7 @@ impl ApiError {
         Self {
             code: ErrorCode::SessionNotFound,
             message: "No active sessions".to_string(),
-            suggestion: Some("Run 'pilotty spawn <command>' to create a session".into()),
+            suggestion: Some("Run 'agent-terminal spawn <command>' to create a session".into()),
         }
     }
 
@@ -132,7 +132,7 @@ impl ApiError {
             code: ErrorCode::CommandFailed,
             message: format!("Maximum session limit ({}) reached", max),
             suggestion: Some(
-                "Kill an existing session with 'pilotty kill' before creating a new one".into(),
+                "Kill an existing session with 'agent-terminal kill' before creating a new one".into(),
             ),
         }
     }
@@ -168,7 +168,7 @@ impl ApiError {
             code: ErrorCode::CommandFailed,
             message: format!("Failed to write to terminal: {}", error),
             suggestion: Some(
-                "The terminal session may have exited. Run 'pilotty list-sessions' to check."
+                "The terminal session may have exited. Run 'agent-terminal list-sessions' to check."
                     .into(),
             ),
         }

@@ -607,7 +607,7 @@ async fn handle_spawn(
             request_id,
             ApiError::invalid_input_with_suggestion(
                 "No command specified",
-                "Provide a command to run, e.g., 'pilotty spawn bash' or 'pilotty spawn vim file.txt'",
+                "Provide a command to run, e.g., 'agent-terminal spawn bash' or 'agent-terminal spawn vim file.txt'",
             ),
         );
     }
@@ -1062,7 +1062,7 @@ async fn handle_key(
                 ApiError::invalid_input_with_suggestion(
                     format!("Invalid key: '{}'", key),
                     "Use named keys (Enter, Tab, Escape, F1), combos (Ctrl+C, Alt+F), \
-                     or space-separated sequences (\"Ctrl+X m\"). Run 'pilotty key --help' for examples.",
+                     or space-separated sequences (\"Ctrl+X m\"). Run 'agent-terminal key --help' for examples.",
                 ),
             );
         }

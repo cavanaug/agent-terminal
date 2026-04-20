@@ -82,7 +82,7 @@ impl DaemonClient {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     bail!(
-                        "Daemon exited immediately with status: {} (check logs or run 'pilotty daemon' directly to diagnose)",
+                        "Daemon exited immediately with status: {} (check logs or run 'agent-terminal daemon' directly to diagnose)",
                         status
                     );
                 }
