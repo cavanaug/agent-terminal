@@ -95,8 +95,8 @@ fn examples_command_teaches_wait_then_snapshot_settle() {
     let stdout = run(&["examples"]);
 
     for expected in [
-        "agent-terminal wait -s editor \"hello.txt\"",
-        "agent-terminal snapshot -s editor --await-change \"$HASH\" --settle 100",
+        "agent-terminal wait -s shell \"agent-terminal> \"",
+        "agent-terminal snapshot -s shell --await-change \"$HASH\" --settle 100",
         "agent-terminal wait-for ... still work",
         "For simple text or regex polling, prefer agent-terminal wait.",
         "For advanced terminal-state synchronization, prefer agent-terminal snapshot --await-change ... --settle ... .",
@@ -108,7 +108,7 @@ fn examples_command_teaches_wait_then_snapshot_settle() {
     }
 
     assert!(
-        !stdout.contains("agent-terminal wait-for -s editor"),
+        !stdout.contains("agent-terminal wait-for -s shell"),
         "examples output should not teach wait-for as the primary surface\n{stdout}"
     );
 }
@@ -122,8 +122,8 @@ fn readme_prefers_wait_contract_and_keeps_snapshot_settle_explicit() {
         "agent-terminal wait \"Ready\"",
         "agent-terminal wait \"Error\" --regex",
         "agent-terminal wait \"Done\" -t 5000",
-        "agent-terminal wait -s editor \"hello.txt\"",
-        "4. `agent-terminal wait` - Simple text/regex polling before sleeping",
+        "agent-terminal wait -s shell \"agent-terminal> \"",
+        "2. `agent-terminal wait -s shell \"agent-terminal> \"` - Wait for the prompt before sending input.",
         "`agent-terminal wait-for ...` remains available as a compatibility alias for existing scripts.",
         "Use `agent-terminal snapshot --await-change <content_hash> --settle <ms>` when you need to wait for the screen to both change and stabilize.",
     ] {
@@ -137,7 +137,7 @@ fn readme_prefers_wait_contract_and_keeps_snapshot_settle_explicit() {
         "agent-terminal wait-for \"Ready\"",
         "agent-terminal wait-for \"Error\" --regex",
         "agent-terminal wait-for \"Done\" -t 5000",
-        "agent-terminal wait-for -s editor \"hello.txt\"",
+        "agent-terminal wait-for -s shell \"agent-terminal> \"",
         "4. `agent-terminal wait-for` or `snapshot --await-change` - Synchronize instead of sleeping",
     ] {
         assert!(

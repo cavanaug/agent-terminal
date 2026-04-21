@@ -388,37 +388,31 @@ pub struct CompletionsArgs {
 }
 
 /// End-to-end example text for the `examples` command.
-pub const EXAMPLES_TEXT: &str = r#"End-to-end example: Create a file with vi
+pub const EXAMPLES_TEXT: &str = r#"End-to-end example: Run one deterministic shell session
 
-This example spawns vi, writes text to a file, saves, and exits.
+This example starts an interactive shell with an explicit prompt, runs one command,
+waits for the visible terminal change to settle, reads the result, and cleans up.
 
-# 1. Spawn vi to create a new file
-agent-terminal spawn --name editor vi /tmp/hello.txt
+# 1. Spawn a named shell session with a deterministic prompt
+agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i
 
-# 2. Wait for vi to start with simple text polling
-agent-terminal wait -s editor "hello.txt"
+# 2. Wait for the shell prompt before sending input
+agent-terminal wait -s shell "agent-terminal> "
 
-# 3. Press 'i' to enter insert mode
-agent-terminal press -s editor i
+# 3. Capture a baseline hash before triggering visible output
+HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
 
-# 4. Type some text
-agent-terminal type -s editor "Hello from agent-terminal!"
+# 4. Type a command, then press Enter to run it
+agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
+agent-terminal press -s shell Enter
 
-# 5. Press Escape to return to normal mode
-agent-terminal press -s editor Escape
+# 5. Wait for the screen to change and settle, then read terminal state again
+agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
+agent-terminal snapshot -s shell --format text
 
-# 6. Save and quit with :wq
-agent-terminal type -s editor ":wq"
-agent-terminal press -s editor Enter
-
-# 7. Verify the screen changed and then settled before reading terminal state again
-HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
-agent-terminal snapshot -s editor --await-change "$HASH" --settle 100
-
-# 8. Verify the session ended (vi exited)
-agent-terminal list-sessions
-
-# The file /tmp/hello.txt now contains "Hello from agent-terminal!"
+# 6. Clean up the session and stop the daemon when you are done
+agent-terminal kill -s shell
+agent-terminal stop
 
 Compatibility spellings: agent-terminal key ..., Ctrl+..., Alt+..., short arrows like Up, and agent-terminal wait-for ... still work.
 For new docs and scripts, prefer agent-terminal press with Control+..., Meta+..., Option+..., and Arrow... spellings.
@@ -531,7 +525,7 @@ mod tests {
 
     #[test]
     fn wait_examples_teach_wait_first_and_snapshot_settle_for_advanced_sync() {
-        assert!(EXAMPLES_TEXT.contains("agent-terminal wait -s editor \"hello.txt\""));
+        assert!(EXAMPLES_TEXT.contains("agent-terminal wait -s shell \"agent-terminal> \""));
         assert!(
             EXAMPLES_TEXT.contains("For simple text or regex polling, prefer agent-terminal wait")
         );

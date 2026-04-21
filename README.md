@@ -106,35 +106,33 @@ Windows is not currently supported because the daemon/runtime model depends on U
 ## Quick Start
 
 ```bash
-# Spawn a TUI application
-agent-terminal spawn htop
+# Spawn a deterministic interactive shell session
+agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i
 
-# Take a snapshot of the terminal
-agent-terminal snapshot
+# Wait for the prompt before sending input
+agent-terminal wait -s shell "agent-terminal> "
 
-# Wait for simple terminal text with the preferred wait surface
-agent-terminal wait "Ready"
+# Capture a baseline before triggering a visible change
+HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
 
-# Type text
-agent-terminal type "hello world"
+# Run one command
+agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
+agent-terminal press -s shell Enter
 
-# Send keys with the preferred press surface
-agent-terminal press Enter
-agent-terminal press Control+C
+# Wait for the change to settle, then inspect the result
+agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
+agent-terminal snapshot -s shell --format text
 
-# Click at specific coordinates (row, col)
-agent-terminal click 10 5
-
-# List active sessions
-agent-terminal list-sessions
-
-# Stop the daemon
+# Clean up
+agent-terminal kill -s shell
 agent-terminal stop
 ```
 
 Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, short arrows like `Up`, and `agent-terminal wait-for ...`. New docs and examples use `press` with `Control+...`, `Meta+...`, `Option+...`, and `Arrow...`, plus `wait` for simple text/regex polling, first.
 
 Use `agent-terminal snapshot --await-change <content_hash> --settle <ms>` when you need to wait for the screen to both change and stabilize.
+
+Broader command grammar cleanup is intentionally deferred to [M009-HANDOFF.md](./M009-HANDOFF.md) so M008 can standardize the preferred shell lifecycle without changing runtime or protocol semantics.
 
 ## Commands
 
@@ -300,22 +298,24 @@ Related public environment variables:
 ### Example daemon-backed workflow
 
 ```bash
-# Spawn a TUI in a named session
-agent-terminal spawn --name editor vi /tmp/hello.txt
+# Spawn a named shell session with an explicit prompt
+agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i
 
-# Wait for the session to be ready with simple text polling
-agent-terminal wait -s editor "hello.txt"
+# Wait for the prompt before sending input
+agent-terminal wait -s shell "agent-terminal> "
 
-# Capture a baseline hash, then make a change
-HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
-agent-terminal press -s editor i
-agent-terminal type -s editor "Hello from agent-terminal!"
-agent-terminal press -s editor Escape
+# Capture a baseline hash, then trigger visible output
+HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
+agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
+agent-terminal press -s shell Enter
 
-# Wait for the screen to settle, then save and quit
-agent-terminal snapshot -s editor --await-change "$HASH" --settle 50
-agent-terminal type -s editor ":wq"
-agent-terminal press -s editor Enter
+# Wait for the output to change and settle, then inspect it
+agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
+agent-terminal snapshot -s shell --format text
+
+# Clean up the session and daemon explicitly
+agent-terminal kill -s shell
+agent-terminal stop
 ```
 
 ## Usage with AI Agents
@@ -325,7 +325,7 @@ agent-terminal press -s editor Enter
 Most coding agents can work directly from the CLI help:
 
 ```text
-Use agent-terminal to interact with vim. Run agent-terminal --help to inspect the available commands first.
+Use agent-terminal to drive one shell session end to end. Start with agent-terminal examples or --help, then follow the lifecycle: spawn a named shell with an explicit prompt, wait for readiness, type a command, press Enter, snapshot --await-change --settle after the visible change, and clean up with kill then stop.
 ```
 
 ### Add an instruction snippet to AGENTS.md / CLAUDE.md
@@ -333,17 +333,19 @@ Use agent-terminal to interact with vim. Run agent-terminal --help to inspect th
 ```markdown
 ## Terminal Automation
 
-Use `agent-terminal` for TUI automation. Run `agent-terminal --help` for the full command list.
+Use `agent-terminal` for TUI automation. Run `agent-terminal examples` or `agent-terminal --help` before the first interaction.
 
-Core workflow:
-1. `agent-terminal spawn <command>` - Start a TUI application
-2. `agent-terminal snapshot` - Get screen state and capture `content_hash` when needed
-3. `agent-terminal press Tab` / `agent-terminal type "text"` - Navigate and interact
-4. `agent-terminal wait` - Simple text/regex polling before sleeping
-5. `agent-terminal snapshot --await-change <content_hash> --settle <ms>` - Wait for screen changes to settle before reading terminal state again
-6. `agent-terminal list-sessions` / `agent-terminal kill` - Inspect and clean up sessions
+Preferred shell lifecycle:
+1. `agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i` - Start a deterministic shell session.
+2. `agent-terminal wait -s shell "agent-terminal> "` - Wait for the prompt before sending input.
+3. `HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')` - Capture a baseline before the next visible change.
+4. `agent-terminal type -s shell "printf 'hello from agent-terminal\n'"` then `agent-terminal press -s shell Enter` - Trigger one command.
+5. `agent-terminal snapshot -s shell --await-change "$HASH" --settle 100` - Wait for the screen to change and stabilize.
+6. `agent-terminal snapshot -s shell --format text` - Read the updated terminal state.
+7. `agent-terminal kill -s shell` then `agent-terminal stop` - Clean up explicitly when done.
 
-`agent-terminal wait-for ...` remains available as a compatibility alias for existing scripts.
+Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, short arrows like `Up`, and `agent-terminal wait-for ...`.
+Deferred broader grammar work lives in [M009-HANDOFF.md](./M009-HANDOFF.md).
 ```
 
 ### Example: AI TUI interaction

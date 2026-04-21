@@ -87,9 +87,7 @@ fn examples_command_prefers_press_examples() {
     let stdout = run(&["examples"]);
 
     for expected in [
-        "agent-terminal press -s editor i",
-        "agent-terminal press -s editor Escape",
-        "agent-terminal press -s editor Enter",
+        "agent-terminal press -s shell Enter",
         "Compatibility spellings: agent-terminal key ...",
         "Ctrl+...",
         "Alt+...",
@@ -102,7 +100,7 @@ fn examples_command_prefers_press_examples() {
     }
 
     assert!(
-        !stdout.contains("agent-terminal key -s editor"),
+        !stdout.contains("agent-terminal key -s shell"),
         "examples output should not teach key as the primary surface\n{stdout}"
     );
 }
