@@ -37,7 +37,7 @@ agent-terminal lets AI agents interact with terminal applications through a simp
 - **Terminal emulation**: VT100 emulation for accurate screen capture and state tracking.
 - **Render modes**: `basic`, `styled`, and `color` snapshot fidelity.
 - **ANSI text output**: `snapshot --format text` with styled/color render modes emits ANSI SGR sequences that recreate terminal appearance.
-- **Keyboard-first interaction**: Drive TUIs with `key`, `type`, `wait-for`, `scroll`, and `click` commands.
+- **Keyboard-first interaction**: Drive TUIs with `press`, `type`, `wait-for`, `scroll`, and `click` commands.
 - **AI-friendly output**: Structured JSON responses with actionable suggestions on errors.
 - **Multi-session support**: Run multiple terminal apps simultaneously in isolated sessions.
 - **Zero-config daemon**: The daemon auto-starts on first use and auto-stops after 5 minutes idle.
@@ -115,9 +115,9 @@ agent-terminal snapshot
 # Type text
 agent-terminal type "hello world"
 
-# Send keys
-agent-terminal key Enter
-agent-terminal key Ctrl+C
+# Send keys with the preferred press surface
+agent-terminal press Enter
+agent-terminal press Control+C
 
 # Click at specific coordinates (row, col)
 agent-terminal click 10 5
@@ -128,6 +128,8 @@ agent-terminal list-sessions
 # Stop the daemon
 agent-terminal stop
 ```
+
+Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, and short arrows like `Up`. New docs and examples use `press` with `Control+...`, `Meta+...`, `Option+...`, and `Arrow...` first.
 
 ## Commands
 
@@ -164,7 +166,7 @@ agent-terminal snapshot --format text --render styled
 
 # Wait for the screen to change before returning
 HASH=$(agent-terminal snapshot | jq -r '.content_hash')
-agent-terminal key Enter
+agent-terminal press Enter
 agent-terminal snapshot --await-change $HASH
 agent-terminal snapshot --await-change $HASH --settle 100
 ```
@@ -173,19 +175,22 @@ agent-terminal snapshot --await-change $HASH --settle 100
 
 ```bash
 agent-terminal type "hello"
-agent-terminal key Enter
-agent-terminal key Ctrl+C
-agent-terminal key Alt+F
-agent-terminal key F1
-agent-terminal key Tab
-agent-terminal key Escape
-agent-terminal key "Ctrl+X m"
-agent-terminal key "Escape : w q Enter"
-agent-terminal key "a b c" --delay 50
+agent-terminal press Enter
+agent-terminal press Control+C
+agent-terminal press Meta+F
+agent-terminal press ArrowUp
+agent-terminal press F1
+agent-terminal press Tab
+agent-terminal press Escape
+agent-terminal press "Control+X m"
+agent-terminal press "Escape : w q Enter"
+agent-terminal press "a b c" --delay 50
 agent-terminal click 10 5
 agent-terminal scroll up
 agent-terminal scroll down 5
 ```
+
+Compatibility spellings: `key`, `Ctrl+...`, `Alt+...`, and short arrows like `Up` still work. Prefer `press` with `Control+...`, `Meta+...`, `Option+...`, and `Arrow...` when writing new examples or prompts.
 
 ### Terminal control
 
@@ -294,14 +299,14 @@ agent-terminal wait-for -s editor "hello.txt"
 
 # Capture a baseline hash, then make a change
 HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
-agent-terminal key -s editor i
+agent-terminal press -s editor i
 agent-terminal type -s editor "Hello from agent-terminal!"
-agent-terminal key -s editor Escape
+agent-terminal press -s editor Escape
 
 # Wait for the screen to settle, then save and quit
 agent-terminal snapshot -s editor --await-change "$HASH" --settle 50
 agent-terminal type -s editor ":wq"
-agent-terminal key -s editor Enter
+agent-terminal press -s editor Enter
 ```
 
 ## Usage with AI Agents
@@ -324,7 +329,7 @@ Use `agent-terminal` for TUI automation. Run `agent-terminal --help` for the ful
 Core workflow:
 1. `agent-terminal spawn <command>` - Start a TUI application
 2. `agent-terminal snapshot` - Get screen state and capture `content_hash` when needed
-3. `agent-terminal key Tab` / `agent-terminal type "text"` - Navigate and interact
+3. `agent-terminal press Tab` / `agent-terminal type "text"` - Navigate and interact
 4. `agent-terminal wait-for` or `snapshot --await-change` - Synchronize instead of sleeping
 5. `agent-terminal list-sessions` / `agent-terminal kill` - Inspect and clean up sessions
 ```
@@ -338,7 +343,7 @@ agent-terminal spawn --name ai opencode
 agent-terminal wait-for -s ai "Ask anything" -t 15000
 HASH=$(agent-terminal snapshot -s ai | jq -r '.content_hash')
 agent-terminal type -s ai "write a haiku about rust"
-agent-terminal key -s ai Enter
+agent-terminal press -s ai Enter
 agent-terminal snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000 --format text
 agent-terminal scroll -s ai up 10
 agent-terminal snapshot -s ai --format text
@@ -347,21 +352,20 @@ agent-terminal kill -s ai
 
 ## Key Combinations
 
-Supported key formats:
+Preferred contract: use `agent-terminal press` and spell modifiers/arrows as `Control+...`, `Meta+...`, `Option+...`, and `Arrow...` in new docs, prompts, and scripts.
 
-| Format | Example | Notes |
-|--------|---------|-------|
-| Named keys | `Enter`, `Tab`, `Escape`, `Space`, `Backspace` | Case insensitive |
-| Arrow keys | `Up`, `Down`, `Left`, `Right` | Also: `ArrowUp`, etc. |
+Compatibility spellings: `key`, `Ctrl+...`, `Alt+...`, and short arrows like `Up` still work for existing scripts.
+
+| Surface | Preferred examples | Compatibility notes |
+|---------|--------------------|---------------------|
+| Named keys | `Enter`, `Tab`, `Escape`, `Space`, `Backspace` | Case insensitive aliases like `Return` = `Enter`, `Esc` = `Escape` still work |
+| Arrow keys | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` | Short forms like `Up`, `Down`, `Left`, `Right` still parse |
 | Navigation | `Home`, `End`, `PageUp`, `PageDown`, `Insert`, `Delete` | Also: `PgUp`, `PgDn`, `Ins`, `Del` |
-| Function keys | `F1` - `F12` | |
-| Ctrl combos | `Ctrl+C`, `Ctrl+X`, `Ctrl+Z` | Also: `Control+C` |
-| Alt combos | `Alt+F`, `Alt+X` | Also: `Meta+F`, `Option+F` |
-| Shift combos | `Shift+A` | Only uppercases letter keys |
-| Combined | `Ctrl+Alt+C` | |
+| Function keys | `F1` - `F12` | Unchanged |
+| Modifier combos | `Control+C`, `Meta+F`, `Option+F`, `Shift+A` | `Ctrl+C` and `Alt+F` remain supported |
+| Combined modifiers | `Control+Option+C` | Short-form combinations like `Ctrl+Alt+C` still parse |
 | Special | `Plus` | Literal `+` character |
-| Aliases | `Return` = `Enter`, `Esc` = `Escape` | |
-| Sequences | `"Ctrl+X m"`, `"Escape : w q Enter"` | Space-separated keys |
+| Sequences | `"Control+X m"`, `"Escape : w q Enter"` | Space-separated keys |
 
 ## Contributing
 

@@ -64,6 +64,7 @@ Supported Keys:
   Arrows:      ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown
   Function:    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
   Modifiers:   Control+<key>, Meta+<key>, Option+<key>, Shift+<key>
+  Preferred:   Use agent-terminal press with Control+<key>, Meta+<key>, Option+<key>, and Arrow...
   Compatibility: key ..., Ctrl+<key>, Alt+<key>, and short arrows like Up still work
 
 Key Sequences:
@@ -394,6 +395,9 @@ agent-terminal press -s editor Enter
 agent-terminal list-sessions
 
 # The file /tmp/hello.txt now contains "Hello from agent-terminal!"
+
+Compatibility spellings: agent-terminal key ..., Ctrl+..., Alt+..., and short arrows like Up still work.
+For new docs and scripts, prefer agent-terminal press with Control+..., Meta+..., Option+..., and Arrow... spellings.
 "#;
 
 #[cfg(test)]

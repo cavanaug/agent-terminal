@@ -1,3 +1,5 @@
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 fn agent_terminal() -> &'static str {
@@ -20,6 +22,12 @@ fn run(args: &[&str]) -> String {
     );
 
     String::from_utf8(output.stdout).expect("stdout should be valid UTF-8")
+}
+
+fn readme() -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../README.md");
+    fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
 #[test]
@@ -72,4 +80,62 @@ fn key_alias_help_routes_to_press_contract() {
         stdout.contains("agent-terminal press Control+C"),
         "key alias help should inherit preferred press examples\n{stdout}"
     );
+}
+
+#[test]
+fn examples_command_prefers_press_examples() {
+    let stdout = run(&["examples"]);
+
+    for expected in [
+        "agent-terminal press -s editor i",
+        "agent-terminal press -s editor Escape",
+        "agent-terminal press -s editor Enter",
+        "Compatibility spellings: agent-terminal key ...",
+        "Ctrl+...",
+        "Alt+...",
+        "Up",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "examples output should include {expected:?}\n{stdout}"
+        );
+    }
+
+    assert!(
+        !stdout.contains("agent-terminal key -s editor"),
+        "examples output should not teach key as the primary surface\n{stdout}"
+    );
+}
+
+#[test]
+fn readme_prefers_press_contract_and_keeps_compatibility_note() {
+    let readme = readme();
+
+    for expected in [
+        "agent-terminal press Enter",
+        "agent-terminal press Control+C",
+        "agent-terminal press ArrowUp",
+        "Compatibility spellings",
+        "`key`",
+        "`Ctrl+...`",
+        "`Alt+...`",
+        "`Up`",
+    ] {
+        assert!(
+            readme.contains(expected),
+            "README should include {expected:?}\n{readme}"
+        );
+    }
+
+    for unexpected in [
+        "agent-terminal key Enter",
+        "agent-terminal key Ctrl+C",
+        "agent-terminal key Alt+F",
+        "agent-terminal key \"Ctrl+X m\"",
+    ] {
+        assert!(
+            !readme.contains(unexpected),
+            "README should not teach legacy key-first examples like {unexpected:?}\n{readme}"
+        );
+    }
 }
