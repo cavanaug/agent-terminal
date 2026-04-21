@@ -229,7 +229,7 @@ phase "runtime placement"
 [ ! -e "$HOME_DIR/.pilotty" ] || die "stale .pilotty runtime directory created"
 if find "$HOME_DIR" -maxdepth 3 -name '*pilotty*' | grep -q .; then
   find "$HOME_DIR" -maxdepth 3 -print | sort >&2 || true
-  die 'found stale pilotty-named runtime artifacts under isolated HOME'
+  die "found stale pilotty-named runtime artifacts under isolated HOME"
 fi
 
 baseline_screen="$(capture_agent 'capture baseline shell snapshot' snapshot -s "$SESSION_NAME" --format text)"

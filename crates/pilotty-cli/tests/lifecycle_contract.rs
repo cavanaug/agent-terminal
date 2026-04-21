@@ -94,12 +94,15 @@ fn readme_links_the_same_shell_lifecycle_to_tracked_m009_handoff() {
 }
 
 #[test]
-fn m009_handoff_records_deferred_grammar_work() {
+fn m009_handoff_records_deferred_grammar_and_distribution_follow_up() {
     let handoff = read_file("M009-HANDOFF.md");
 
     for expected in [
         "# M009 Handoff",
         "Deferred grammar work",
+        "Deferred external distribution / origin-note follow-up",
+        "R024 remains intentionally deferred under D018.",
+        "Homebrew and related install docs",
         "keep the current runtime and protocol semantics unchanged in M008",
         "Commands::Key",
         "Commands::WaitFor",

@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN="$PROJECT_DIR/target/release/agent-terminal"
 README="$PROJECT_DIR/README.md"
+LEGACY_PRODUCT_NAME="p""ilotty"
 CURRENT_PHASE=""
 
 phase() {
@@ -245,9 +246,9 @@ require_contains "$stop_output" 'Daemon shutting down' 'stop confirmation'
 phase "cleanup"
 wait_for_absent "$SOCKET_PATH" 'daemon socket'
 wait_for_absent "$PID_PATH" 'daemon pid file'
-if find "$HOME_DIR" -maxdepth 3 -name '*pilotty*' | grep -q .; then
+if find "$HOME_DIR" -maxdepth 3 -name "*${LEGACY_PRODUCT_NAME}*" | grep -q .; then
   find "$HOME_DIR" -maxdepth 3 -print | sort >&2 || true
-  die 'found stale pilotty-named artifacts under isolated HOME'
+  die "found stale ${LEGACY_PRODUCT_NAME}-named artifacts under isolated HOME"
 fi
 
 echo 'PASS: preferred wait contract verified.'

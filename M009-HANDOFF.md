@@ -22,6 +22,12 @@ Topics to evaluate in M009:
 - whether internal names like `Commands::Key` and `Commands::WaitFor` should be renamed after deciding the external migration story
 - whether more lifecycle-oriented helper docs/examples should be generated automatically from one shared source
 
+## Deferred external distribution / origin-note follow-up
+
+R024 remains intentionally deferred under D018. Once the M008 lifecycle wording is stable, M009 should align later external distribution/documentation surfaces — for example Homebrew and related install docs — with the `agent-terminal` identity and the same bounded origin-note wording already used inside the repository.
+
+That follow-up should stay scoped to external distribution/origin-note alignment rather than reopening M008 runtime or protocol behavior. The point is to carry the settled identity and provenance wording outward after the public shell lifecycle contract stops moving.
+
 ## Guardrails carried forward from M008
 
 - keep the current runtime and protocol semantics unchanged in M008
