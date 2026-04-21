@@ -88,10 +88,10 @@ printf '%s\n' "$spawn_source_output"
 printf '%s' "$spawn_source_output" | grep -q '"type": "session_created"' \
     || die "Source spawn did not return session_created"
 
-wait_source_output="$(run_agent wait-for -s "$SRC_SESSION" -t 5000 "Bold text")"
+wait_source_output="$(run_agent wait -s "$SRC_SESSION" -t 5000 "Bold text")"
 printf '%s\n' "$wait_source_output"
 printf '%s' "$wait_source_output" | grep -q '"found": true' \
-    || die "Source wait-for did not observe rendered fixture text"
+    || die "Source wait did not observe rendered fixture text"
 
 phase "Capture source snapshots"
 run_agent snapshot -s "$SRC_SESSION" --format full --render color > "$WORK_DIR/full-A.json" \
@@ -121,10 +121,10 @@ printf '%s\n' "$spawn_destination_output"
 printf '%s' "$spawn_destination_output" | grep -q '"type": "session_created"' \
     || die "Destination spawn did not return session_created"
 
-wait_destination_output="$(run_agent wait-for -s "$DST_SESSION" -t 5000 "Bold text")"
+wait_destination_output="$(run_agent wait -s "$DST_SESSION" -t 5000 "Bold text")"
 printf '%s\n' "$wait_destination_output"
 printf '%s' "$wait_destination_output" | grep -q '"found": true' \
-    || die "Destination wait-for did not observe replayed text"
+    || die "Destination wait did not observe replayed text"
 
 phase "Capture destination snapshot"
 run_agent snapshot -s "$DST_SESSION" --format full --render color > "$WORK_DIR/full-B.json" \
