@@ -41,7 +41,7 @@ Examples:
 
 Wait for change:
   HASH=$(agent-terminal snapshot | jq -r '.content_hash')
-  agent-terminal key Enter
+  agent-terminal press Enter
   agent-terminal snapshot --await-change $HASH           # Block until screen changes
   agent-terminal snapshot --await-change $HASH --settle 100  # Wait for 100ms stability")]
     Snapshot(SnapshotArgs),
@@ -58,25 +58,27 @@ Examples:
     Type(TypeArgs),
 
     /// Send a key, key combination, or key sequence
-    #[command(after_long_help = "\
+    #[command(name = "press", visible_alias = "key", after_long_help = "\
 Supported Keys:
   Navigation:  Enter, Tab, Escape, Backspace, Space, Delete, Insert
-  Arrows:      Up, Down, Left, Right, Home, End, PageUp, PageDown
+  Arrows:      ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown
   Function:    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12
-  Modifiers:   Ctrl+<key>, Alt+<key>
+  Modifiers:   Control+<key>, Meta+<key>, Option+<key>, Shift+<key>
+  Compatibility: key ..., Ctrl+<key>, Alt+<key>, and short arrows like Up still work
 
 Key Sequences:
-  Space-separated keys are sent in order. Useful for chords like Emacs C-x m.
+  Space-separated keys are sent in order. Useful for chords like Emacs Control+X m.
 
 Examples:
-  agent-terminal key Enter                     # Press enter
-  agent-terminal key Ctrl+C                    # Send interrupt signal
-  agent-terminal key Alt+F                     # Alt+F (often opens File menu)
-  agent-terminal key \"Ctrl+X m\"                # Emacs chord: Ctrl+X then m
-  agent-terminal key \"Escape : w q Enter\"      # vim :wq sequence
-  agent-terminal key \"Ctrl+X Ctrl+S\"           # Emacs save (two combos)
-  agent-terminal key -s editor Escape          # Send Escape to specific session
-  agent-terminal key \"a b c\" --delay 50        # Send a, b, c with 50ms delay between")]
+  agent-terminal press Enter                   # Press enter
+  agent-terminal press Control+C               # Send interrupt signal
+  agent-terminal press Meta+F                  # Meta+F (often opens File menu)
+  agent-terminal press Option+F                # Option+F on macOS terminals
+  agent-terminal press ArrowUp                 # Arrow key using preferred spelling
+  agent-terminal press \"Control+X m\"          # Emacs chord: Control+X then m
+  agent-terminal press \"Escape : w q Enter\"    # vim :wq sequence
+  agent-terminal press -s editor Escape        # Send Escape to specific session
+  agent-terminal press \"a b c\" --delay 50      # Send a, b, c with 50ms delay between")]
     Key(KeyArgs),
 
     /// Click at a specific row and column coordinate
@@ -285,7 +287,7 @@ pub struct TypeArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct KeyArgs {
-    /// Key, combo, or sequence to send (e.g., Enter, Ctrl+C, "Ctrl+X m")
+    /// Key, combo, or sequence to send (e.g., Enter, Control+C, "Control+X m")
     pub key: String,
 
     /// Delay between keys in a sequence (milliseconds, max 10000)
@@ -376,17 +378,17 @@ agent-terminal spawn --name editor vi /tmp/hello.txt
 agent-terminal wait-for -s editor "hello.txt"
 
 # 3. Press 'i' to enter insert mode
-agent-terminal key -s editor i
+agent-terminal press -s editor i
 
 # 4. Type some text
 agent-terminal type -s editor "Hello from agent-terminal!"
 
 # 5. Press Escape to return to normal mode
-agent-terminal key -s editor Escape
+agent-terminal press -s editor Escape
 
 # 6. Save and quit with :wq
 agent-terminal type -s editor ":wq"
-agent-terminal key -s editor Enter
+agent-terminal press -s editor Enter
 
 # 7. Verify the session ended (vi exited)
 agent-terminal list-sessions
@@ -420,6 +422,59 @@ mod tests {
                 assert!(matches!(args.render_mode, CliRenderMode::Color));
             }
             _ => panic!("Expected snapshot command"),
+        }
+    }
+
+    #[test]
+    fn press_alias_parses_preferred_press_command() {
+        let cli = Cli::try_parse_from(["agent-terminal", "press", "Control+C"])
+            .expect("press should parse as the preferred key verb");
+
+        match cli.command {
+            Commands::Key(args) => {
+                assert_eq!(args.key, "Control+C");
+                assert_eq!(args.delay, 0);
+                assert_eq!(args.session, None);
+            }
+            _ => panic!("Expected key command"),
+        }
+    }
+
+    #[test]
+    fn press_alias_keeps_key_compatibility_alias() {
+        let cli = Cli::try_parse_from(["agent-terminal", "key", "Ctrl+C"])
+            .expect("key alias should remain supported");
+
+        match cli.command {
+            Commands::Key(args) => {
+                assert_eq!(args.key, "Ctrl+C");
+                assert_eq!(args.delay, 0);
+                assert_eq!(args.session, None);
+            }
+            _ => panic!("Expected key command"),
+        }
+    }
+
+    #[test]
+    fn press_alias_supports_session_and_delay_on_preferred_command() {
+        let cli = Cli::try_parse_from([
+            "agent-terminal",
+            "press",
+            "-s",
+            "editor",
+            "--delay",
+            "50",
+            "ArrowUp",
+        ])
+        .expect("press should accept session targeting and delay options");
+
+        match cli.command {
+            Commands::Key(args) => {
+                assert_eq!(args.key, "ArrowUp");
+                assert_eq!(args.delay, 50);
+                assert_eq!(args.session.as_deref(), Some("editor"));
+            }
+            _ => panic!("Expected key command"),
         }
     }
 }

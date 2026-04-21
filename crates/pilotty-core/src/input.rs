@@ -624,6 +624,59 @@ mod tests {
     }
 
     #[test]
+    fn preferred_key_modifier_aliases_preserve_existing_bytes() {
+        let control = parse_key_sequence("Control+C", false).unwrap();
+        let ctrl = parse_key_sequence("Ctrl+C", false).unwrap();
+        assert_eq!(control, ctrl);
+        assert_eq!(control[0], vec![0x03]);
+
+        let meta = parse_key_sequence("Meta+F", false).unwrap();
+        let option = parse_key_sequence("Option+F", false).unwrap();
+        let alt = parse_key_sequence("Alt+F", false).unwrap();
+        assert_eq!(meta, alt);
+        assert_eq!(option, alt);
+        assert_eq!(meta[0], vec![0x1b, b'F']);
+    }
+
+    #[test]
+    fn preferred_key_arrow_aliases_preserve_existing_bytes() {
+        assert_eq!(
+            parse_key_sequence("ArrowUp", false),
+            parse_key_sequence("Up", false)
+        );
+        assert_eq!(
+            parse_key_sequence("ArrowUp", true),
+            parse_key_sequence("Up", true)
+        );
+        assert_eq!(
+            parse_key_sequence("ArrowLeft ArrowDown", false),
+            parse_key_sequence("Left Down", false)
+        );
+    }
+
+    #[test]
+    fn preferred_key_shift_tab_and_chord_compatibility_remain_supported() {
+        assert_eq!(
+            parse_key_sequence("Shift+Tab", false),
+            Some(vec![b"\t".to_vec()])
+        );
+        assert_eq!(
+            parse_key_sequence("Control+X m", false),
+            parse_key_sequence("Ctrl+X m", false)
+        );
+    }
+
+    #[test]
+    fn preferred_key_invalid_tokens_still_fail_cleanly() {
+        for invalid in ["Control", "Control+", "Meta+", "Option+", "ArrowUp DefinitelyNotAKey"] {
+            assert!(
+                parse_key_sequence(invalid, false).is_none(),
+                "{invalid:?} should still be rejected"
+            );
+        }
+    }
+
+    #[test]
     fn test_parse_key_sequence_application_cursor_mode() {
         // Arrow keys in application cursor mode
         let seq = parse_key_sequence("Up Down", true).unwrap();

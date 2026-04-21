@@ -190,6 +190,6 @@ fn invalid_key_stderr_uses_agent_terminal_identity() {
     assert_failure_contains(
         &invalid_key,
         "[INVALID_INPUT]",
-        "Run 'agent-terminal key --help' for examples.",
+        "Run 'agent-terminal press --help' for examples.",
     );
 }

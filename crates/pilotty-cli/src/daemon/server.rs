@@ -1098,8 +1098,8 @@ async fn handle_key(
                 request_id,
                 ApiError::invalid_input_with_suggestion(
                     format!("Invalid key: '{}'", key),
-                    "Use named keys (Enter, Tab, Escape, F1), combos (Ctrl+C, Alt+F), \
-                     or space-separated sequences (\"Ctrl+X m\"). Run 'agent-terminal key --help' for examples.",
+                    "Use named keys (Enter, Tab, Escape, F1), combos (Control+C, Meta+F), \
+                     or space-separated sequences (\"Control+X m\"). Run 'agent-terminal press --help' for examples.",
                 ),
             );
         }
