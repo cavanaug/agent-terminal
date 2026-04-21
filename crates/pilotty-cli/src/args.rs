@@ -58,7 +58,10 @@ Examples:
     Type(TypeArgs),
 
     /// Send a key, key combination, or key sequence
-    #[command(name = "press", visible_alias = "key", after_long_help = "\
+    #[command(
+        name = "press",
+        visible_alias = "key",
+        after_long_help = "\
 Supported Keys:
   Navigation:  Enter, Tab, Escape, Backspace, Space, Delete, Insert
   Arrows:      ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Home, End, PageUp, PageDown
@@ -79,7 +82,8 @@ Examples:
   agent-terminal press \"Control+X m\"          # Emacs chord: Control+X then m
   agent-terminal press \"Escape : w q Enter\"    # vim :wq sequence
   agent-terminal press -s editor Escape        # Send Escape to specific session
-  agent-terminal press \"a b c\" --delay 50      # Send a, b, c with 50ms delay between")]
+  agent-terminal press \"a b c\" --delay 50      # Send a, b, c with 50ms delay between"
+    )]
     Key(KeyArgs),
 
     /// Click at a specific row and column coordinate
@@ -101,13 +105,29 @@ Examples:
     /// Resize the terminal
     Resize(ResizeArgs),
 
-    /// Wait for text to appear on screen
-    #[command(after_help = "\
+    /// Wait for literal text or a regex to appear on screen
+    #[command(
+        name = "wait",
+        visible_alias = "wait-for",
+        after_long_help = "\
+Simple sync:
+  Use agent-terminal wait for literal text or regex polling when you just need to
+  know whether terminal output has appeared.
+
+Advanced terminal-state sync:
+  Use agent-terminal snapshot --await-change <content_hash> --settle <ms> when you
+  need to wait for the screen to both change and stabilize before continuing.
+
 Examples:
-  agent-terminal wait-for 'Ready'              # Wait for literal text
-  agent-terminal wait-for -r 'error|warning'   # Wait for regex pattern
-  agent-terminal wait-for -t 5000 'Done'       # Wait up to 5 seconds
-  agent-terminal wait-for -s editor '~'        # Wait in specific session")]
+  agent-terminal wait 'Ready'                  # Wait for literal text
+  agent-terminal wait -r 'error|warning'       # Wait for regex pattern
+  agent-terminal wait -t 5000 'Done'           # Wait up to 5 seconds
+  agent-terminal wait -s editor '~'            # Wait in specific session
+
+Compatibility:
+  agent-terminal wait-for ... remains supported as a compatibility alias
+  agent-terminal wait-for 'Ready'             # Compatibility alias for wait"
+    )]
     WaitFor(WaitForArgs),
 
     /// Show an end-to-end usage example
@@ -375,8 +395,8 @@ This example spawns vi, writes text to a file, saves, and exits.
 # 1. Spawn vi to create a new file
 agent-terminal spawn --name editor vi /tmp/hello.txt
 
-# 2. Wait for vi to start
-agent-terminal wait-for -s editor "hello.txt"
+# 2. Wait for vi to start with simple text polling
+agent-terminal wait -s editor "hello.txt"
 
 # 3. Press 'i' to enter insert mode
 agent-terminal press -s editor i
@@ -391,19 +411,25 @@ agent-terminal press -s editor Escape
 agent-terminal type -s editor ":wq"
 agent-terminal press -s editor Enter
 
-# 7. Verify the session ended (vi exited)
+# 7. Verify the screen changed and then settled before reading terminal state again
+HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
+agent-terminal snapshot -s editor --await-change "$HASH" --settle 100
+
+# 8. Verify the session ended (vi exited)
 agent-terminal list-sessions
 
 # The file /tmp/hello.txt now contains "Hello from agent-terminal!"
 
-Compatibility spellings: agent-terminal key ..., Ctrl+..., Alt+..., and short arrows like Up still work.
+Compatibility spellings: agent-terminal key ..., Ctrl+..., Alt+..., short arrows like Up, and agent-terminal wait-for ... still work.
 For new docs and scripts, prefer agent-terminal press with Control+..., Meta+..., Option+..., and Arrow... spellings.
+For simple text or regex polling, prefer agent-terminal wait.
+For advanced terminal-state synchronization, prefer agent-terminal snapshot --await-change ... --settle ... .
 "#;
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, CliRenderMode, Commands};
-    use clap::Parser;
+    use super::{Cli, CliRenderMode, Commands, EXAMPLES_TEXT};
+    use clap::{CommandFactory, Parser};
 
     #[test]
     fn test_spawn_parses_hyphenated_args() {
@@ -427,6 +453,90 @@ mod tests {
             }
             _ => panic!("Expected snapshot command"),
         }
+    }
+
+    #[test]
+    fn wait_alias_parses_preferred_wait_command() {
+        let cli = Cli::try_parse_from(["agent-terminal", "wait", "Ready"])
+            .expect("wait should parse as the preferred simple sync verb");
+
+        match cli.command {
+            Commands::WaitFor(args) => {
+                assert_eq!(args.pattern, "Ready");
+                assert_eq!(args.timeout, 30000);
+                assert!(!args.regex);
+                assert_eq!(args.session, None);
+            }
+            _ => panic!("Expected wait-for command mapping"),
+        }
+    }
+
+    #[test]
+    fn wait_alias_keeps_wait_for_compatibility_alias() {
+        let cli = Cli::try_parse_from(["agent-terminal", "wait-for", "Ready"])
+            .expect("wait-for alias should remain supported");
+
+        match cli.command {
+            Commands::WaitFor(args) => {
+                assert_eq!(args.pattern, "Ready");
+                assert_eq!(args.timeout, 30000);
+                assert!(!args.regex);
+                assert_eq!(args.session, None);
+            }
+            _ => panic!("Expected wait-for command mapping"),
+        }
+    }
+
+    #[test]
+    fn wait_alias_supports_session_timeout_and_regex_on_preferred_command() {
+        let cli = Cli::try_parse_from([
+            "agent-terminal",
+            "wait",
+            "-s",
+            "editor",
+            "--timeout",
+            "5000",
+            "--regex",
+            "error|warning",
+        ])
+        .expect("wait should accept session targeting, timeout, and regex options");
+
+        match cli.command {
+            Commands::WaitFor(args) => {
+                assert_eq!(args.pattern, "error|warning");
+                assert_eq!(args.timeout, 5000);
+                assert!(args.regex);
+                assert_eq!(args.session.as_deref(), Some("editor"));
+            }
+            _ => panic!("Expected wait-for command mapping"),
+        }
+    }
+
+    #[test]
+    fn wait_help_teaches_simple_wait_and_advanced_snapshot_settle() {
+        let mut command = Cli::command();
+        let wait = command
+            .find_subcommand_mut("wait")
+            .expect("wait should be the canonical subcommand");
+        let mut help = Vec::new();
+        wait.write_long_help(&mut help)
+            .expect("wait help should render");
+        let help = String::from_utf8(help).expect("wait help should be valid UTF-8");
+
+        assert!(help.contains("agent-terminal wait 'Ready'"));
+        assert!(help.contains("agent-terminal wait-for 'Ready'"));
+        assert!(help.contains("snapshot --await-change"));
+        assert!(help.contains("--settle"));
+    }
+
+    #[test]
+    fn wait_examples_teach_wait_first_and_snapshot_settle_for_advanced_sync() {
+        assert!(EXAMPLES_TEXT.contains("agent-terminal wait -s editor \"hello.txt\""));
+        assert!(
+            EXAMPLES_TEXT.contains("For simple text or regex polling, prefer agent-terminal wait")
+        );
+        assert!(EXAMPLES_TEXT.contains("snapshot --await-change"));
+        assert!(EXAMPLES_TEXT.contains("--settle"));
     }
 
     #[test]
