@@ -37,7 +37,7 @@ agent-terminal lets AI agents interact with terminal applications through a simp
 - **Terminal emulation**: VT100 emulation for accurate screen capture and state tracking.
 - **Render modes**: `basic`, `styled`, and `color` snapshot fidelity.
 - **ANSI text output**: `snapshot --format text` with styled/color render modes emits ANSI SGR sequences that recreate terminal appearance.
-- **Keyboard-first interaction**: Drive TUIs with `press`, `type`, `wait-for`, `scroll`, and `click` commands.
+- **Keyboard-first interaction**: Drive TUIs with `press`, `type`, `wait`, `scroll`, and `click` commands.
 - **AI-friendly output**: Structured JSON responses with actionable suggestions on errors.
 - **Multi-session support**: Run multiple terminal apps simultaneously in isolated sessions.
 - **Zero-config daemon**: The daemon auto-starts on first use and auto-stops after 5 minutes idle.
@@ -112,6 +112,9 @@ agent-terminal spawn htop
 # Take a snapshot of the terminal
 agent-terminal snapshot
 
+# Wait for simple terminal text with the preferred wait surface
+agent-terminal wait "Ready"
+
 # Type text
 agent-terminal type "hello world"
 
@@ -129,7 +132,9 @@ agent-terminal list-sessions
 agent-terminal stop
 ```
 
-Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, and short arrows like `Up`. New docs and examples use `press` with `Control+...`, `Meta+...`, `Option+...`, and `Arrow...` first.
+Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, short arrows like `Up`, and `agent-terminal wait-for ...`. New docs and examples use `press` with `Control+...`, `Meta+...`, `Option+...`, and `Arrow...`, plus `wait` for simple text/regex polling, first.
+
+Use `agent-terminal snapshot --await-change <content_hash> --settle <ms>` when you need to wait for the screen to both change and stabilize.
 
 ## Commands
 
@@ -196,10 +201,14 @@ Compatibility spellings: `key`, `Ctrl+...`, `Alt+...`, and short arrows like `Up
 
 ```bash
 agent-terminal resize 120 40
-agent-terminal wait-for "Ready"
-agent-terminal wait-for "Error" --regex
-agent-terminal wait-for "Done" -t 5000
+agent-terminal wait "Ready"
+agent-terminal wait "Error" --regex
+agent-terminal wait "Done" -t 5000
 ```
+
+Prefer `agent-terminal wait` for literal text or regex polling. `agent-terminal wait-for ...` remains available as a compatibility alias for existing scripts.
+
+Use `agent-terminal snapshot --await-change <content_hash> --settle <ms>` when you need to wait for the screen to both change and stabilize.
 
 ## Snapshot Output
 
@@ -294,8 +303,8 @@ Related public environment variables:
 # Spawn a TUI in a named session
 agent-terminal spawn --name editor vi /tmp/hello.txt
 
-# Wait for the session to be ready
-agent-terminal wait-for -s editor "hello.txt"
+# Wait for the session to be ready with simple text polling
+agent-terminal wait -s editor "hello.txt"
 
 # Capture a baseline hash, then make a change
 HASH=$(agent-terminal snapshot -s editor | jq -r '.content_hash')
@@ -330,8 +339,11 @@ Core workflow:
 1. `agent-terminal spawn <command>` - Start a TUI application
 2. `agent-terminal snapshot` - Get screen state and capture `content_hash` when needed
 3. `agent-terminal press Tab` / `agent-terminal type "text"` - Navigate and interact
-4. `agent-terminal wait-for` or `snapshot --await-change` - Synchronize instead of sleeping
-5. `agent-terminal list-sessions` / `agent-terminal kill` - Inspect and clean up sessions
+4. `agent-terminal wait` - Simple text/regex polling before sleeping
+5. `agent-terminal snapshot --await-change <content_hash> --settle <ms>` - Wait for screen changes to settle before reading terminal state again
+6. `agent-terminal list-sessions` / `agent-terminal kill` - Inspect and clean up sessions
+
+`agent-terminal wait-for ...` remains available as a compatibility alias for existing scripts.
 ```
 
 ### Example: AI TUI interaction
@@ -340,7 +352,7 @@ For AI-powered terminal apps that stream responses:
 
 ```bash
 agent-terminal spawn --name ai opencode
-agent-terminal wait-for -s ai "Ask anything" -t 15000
+agent-terminal wait -s ai "Ask anything" -t 15000
 HASH=$(agent-terminal snapshot -s ai | jq -r '.content_hash')
 agent-terminal type -s ai "write a haiku about rust"
 agent-terminal press -s ai Enter

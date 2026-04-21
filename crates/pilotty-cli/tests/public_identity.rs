@@ -51,6 +51,7 @@ fn help_and_example_surfaces_use_agent_terminal_identity() {
     for (surface, args) in [
         ("top-level help", &["--help"] as &[&str]),
         ("spawn help", &["spawn", "--help"]),
+        ("wait help", &["wait", "--help"]),
         ("wait-for help", &["wait-for", "--help"]),
         ("examples command", &["examples"]),
     ] {

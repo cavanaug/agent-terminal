@@ -165,24 +165,17 @@ fn invalid_key_stderr_uses_agent_terminal_identity() {
         "spawn should create a session\n{spawn_stdout}"
     );
 
-    let wait = sandbox.run(&[
-        "wait-for",
-        "-s",
-        &sandbox.session_name,
-        "-t",
-        "10000",
-        "READY",
-    ]);
+    let wait = sandbox.run(&["wait", "-s", &sandbox.session_name, "-t", "10000", "READY"]);
     assert!(
         wait.status.success(),
-        "wait-for failed\nstdout:\n{}\nstderr:\n{}",
+        "wait failed\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&wait.stdout),
         String::from_utf8_lossy(&wait.stderr)
     );
-    let wait_stdout = String::from_utf8(wait.stdout).expect("wait-for stdout should be UTF-8");
+    let wait_stdout = String::from_utf8(wait.stdout).expect("wait stdout should be UTF-8");
     assert!(
         wait_stdout.contains("\"found\": true"),
-        "wait-for should confirm READY\n{wait_stdout}"
+        "wait should confirm READY\n{wait_stdout}"
     );
 
     let invalid_key = sandbox.run(&["key", "-s", &sandbox.session_name, "DefinitelyNotAKey"]);
