@@ -35,8 +35,9 @@ agent-terminal lets AI agents interact with terminal applications through a simp
 
 - **PTY session management**: Spawn and manage terminal applications in background sessions.
 - **Terminal emulation**: VT100 emulation for accurate screen capture and state tracking.
-- **Render modes**: `basic`, `styled`, and `color` snapshot fidelity.
-- **ANSI text output**: `snapshot --format text` with styled/color render modes emits ANSI SGR sequences that recreate terminal appearance.
+- **Two-axis snapshot control**: `--format` (encoding: `ansi` or `json`) × `--render` (feature set: `text`, `style`, `color`).
+- **ANSI text output**: `snapshot --format ansi` emits ANSI SGR sequences that recreate terminal appearance.
+- **Token-efficient JSON**: `snapshot --format json --render text` strips all style/color spans for minimum LLM token usage.
 - **Keyboard-first interaction**: Drive TUIs with `press`, `type`, `wait`, `scroll`, and `click` commands.
 - **AI-friendly output**: Structured JSON responses with actionable suggestions on errors.
 - **Multi-session support**: Run multiple terminal apps simultaneously in isolated sessions.
@@ -113,7 +114,7 @@ agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --
 agent-terminal wait -s shell "agent-terminal> "
 
 # Capture a baseline before triggering a visible change
-HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
+HASH=$(agent-terminal snapshot -s shell --format json | jq -r '.content_hash')
 
 # Run one command
 agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
@@ -121,7 +122,7 @@ agent-terminal press -s shell Enter
 
 # Wait for the change to settle, then inspect the result
 agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
-agent-terminal snapshot -s shell --format text
+agent-terminal snapshot -s shell --format json --render text
 
 # Clean up
 agent-terminal kill -s shell
@@ -153,22 +154,27 @@ agent-terminal examples                  # Show end-to-end workflow example
 ### Screen capture
 
 ```bash
-agent-terminal snapshot                      # Full JSON with text
-agent-terminal snapshot --format compact     # JSON without text field
-agent-terminal snapshot --format text        # Plain text with cursor indicator
-agent-terminal snapshot -s editor            # Snapshot a specific session
+agent-terminal snapshot                                  # ANSI output (default)
+agent-terminal snapshot --format json                    # JSON rows for agent/LLM consumption
+agent-terminal snapshot --format json --render text      # Minimal tokens: text only, no spans
+agent-terminal snapshot --format json --render text,color  # Text + colors, no bold/italic info
+agent-terminal snapshot -s editor                        # Snapshot a specific session
 
-# Render modes control style/color fidelity
-agent-terminal snapshot --render basic       # Text only
-agent-terminal snapshot --render styled      # Text attributes (bold, italic, underline, dim, inverse)
-agent-terminal snapshot --render color       # Full color (default: style_map + color_map)
+# --format controls encoding
+#   ansi  ANSI-escaped output — renders with color/style in a terminal (default)
+#   json  Structured JSON with a 'rows' array — for LLM/agent consumption
 
-# ANSI text output recreates terminal appearance
-agent-terminal snapshot --format text --render color
-agent-terminal snapshot --format text --render styled
+# --render controls what data appears in the output (comma-separated, default: text,style,color)
+#   text   Plain text content (always included)
+#   style  Text attributes: bold, italic, dim, underline, inverse
+#   color  Foreground and background colors
+
+# ANSI output recreates terminal appearance
+agent-terminal snapshot                         # ANSI with full style+color
+agent-terminal snapshot --render text           # ANSI plain text only
 
 # Wait for the screen to change before returning
-HASH=$(agent-terminal snapshot | jq -r '.content_hash')
+HASH=$(agent-terminal snapshot --format json | jq -r '.content_hash')
 agent-terminal press Enter
 agent-terminal snapshot --await-change $HASH
 agent-terminal snapshot --await-change $HASH --settle 100
@@ -210,48 +216,84 @@ Use `agent-terminal snapshot --await-change <content_hash> --settle <ms>` when y
 
 ## Snapshot Output
 
-The `snapshot` command returns structured data about the terminal screen:
+The `snapshot --format json` command returns structured data about the terminal screen. Each row is represented as an entry in the `rows` array; spans only appear when style/color data is present.
 
 ```json
 {
+  "type": "screen_state",
   "snapshot_id": 42,
   "size": { "cols": 80, "rows": 24 },
   "cursor": { "row": 5, "col": 10, "visible": true },
-  "text": "Options: [x] Enable  [ ] Debug\nActions: [OK] [Cancel]",
+  "rows": [
+    {
+      "r": 0,
+      "t": "ERROR normal blue",
+      "spans": [
+        { "c": 0, "l": 5, "s": { "fg": 1, "b": true } },
+        { "c": 13, "l": 4, "s": { "fg": 4 } }
+      ]
+    },
+    { "r": 1, "t": "dim text", "spans": [{ "c": 0, "l": 8, "s": { "d": true } }] }
+  ],
   "elements": [
     { "kind": "toggle", "row": 0, "col": 9, "width": 3, "text": "[x]", "confidence": 1.0, "checked": true },
-    { "kind": "toggle", "row": 0, "col": 22, "width": 3, "text": "[ ]", "confidence": 1.0, "checked": false },
-    { "kind": "button", "row": 1, "col": 9, "width": 4, "text": "[OK]", "confidence": 0.8 },
-    { "kind": "button", "row": 1, "col": 14, "width": 8, "text": "[Cancel]", "confidence": 0.8 }
+    { "kind": "button", "row": 1, "col": 9, "width": 4, "text": "[OK]", "confidence": 0.8 }
   ],
   "content_hash": 12345678901234567890
 }
 ```
 
-### Render modes
+Row fields: `r` = row index, `t` = text content, `spans` = optional style/color spans.
+Span fields: `c` = start column, `l` = length, `s` = style object.
+Style fields (`s`): `fg`/`bg` = color index, `b` = bold, `i` = italic, `d` = dim, `u` = underline, `v` = inverse. All fields are optional and omitted when not set.
 
-Sessions always capture full style and color data internally, and `agent-terminal snapshot` defaults to `--render color` unless you override it per request.
+### Two-axis snapshot control
 
-| Mode | `--format full` (JSON) | `--format text` |
-|------|------------------------|-----------------|
-| `basic` | text + elements | Plain text with cursor indicator |
-| `styled` | text + elements + `style_map` | ANSI text with bold/italic/underline |
-| `color` (default) | text + elements + `style_map` + `color_map` | ANSI text with full color |
+Snapshot output is controlled by two independent flags:
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--format` | `ansi` (default), `json` | Output encoding |
+| `--render` | `text,style,color` (default) | Comma-separated feature set |
+
+**`--render` features:**
+
+| Feature | Description |
+|---------|-------------|
+| `text` | Plain text content (always included) |
+| `style` | Text attributes: bold, italic, dim, underline, inverse |
+| `color` | Foreground and background colors |
+
+**Token budget examples for LLM/agent use:**
 
 ```bash
-agent-terminal snapshot
-agent-terminal snapshot --render styled
-agent-terminal snapshot --render basic
+agent-terminal snapshot --format json                          # Full JSON (default render)
+agent-terminal snapshot --format json --render text            # Minimum tokens: text only
+agent-terminal snapshot --format json --render text,color      # Text + colors, no style attrs
+agent-terminal snapshot --format json --render text,style,color  # All data (same as default)
 ```
 
-### ANSI text output
-
-With `--format text` and `--render styled` or `--render color`, the output contains ANSI SGR escape sequences that recreate the terminal's visual appearance:
+**jq recipes:**
 
 ```bash
-agent-terminal spawn ls --color
-agent-terminal snapshot --format text --render color
-agent-terminal snapshot -s myapp --format text --render color | less -R
+# All row text as an array
+agent-terminal snapshot --format json | jq '[.rows[].t]'
+
+# Find a specific row by index
+agent-terminal snapshot --format json | jq '.rows[] | select(.r == 5)'
+
+# Find rows containing "error"
+agent-terminal snapshot --format json | jq '.rows[] | select(.t | contains("error"))'
+```
+
+### ANSI output
+
+`--format ansi` (the default) emits ANSI SGR escape sequences that recreate the terminal's visual appearance. Use `--render` to control which attributes are included:
+
+```bash
+agent-terminal snapshot                             # ANSI with full style+color
+agent-terminal snapshot --render text               # ANSI plain text (no SGR codes)
+agent-terminal snapshot | less -R                   # Pipe into a pager
 ```
 
 ## Runtime and Daemon
@@ -305,13 +347,13 @@ agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --
 agent-terminal wait -s shell "agent-terminal> "
 
 # Capture a baseline hash, then trigger visible output
-HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
+HASH=$(agent-terminal snapshot -s shell --format json | jq -r '.content_hash')
 agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
 agent-terminal press -s shell Enter
 
 # Wait for the output to change and settle, then inspect it
 agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
-agent-terminal snapshot -s shell --format text
+agent-terminal snapshot -s shell --format json --render text
 
 # Clean up the session and daemon explicitly
 agent-terminal kill -s shell
@@ -338,10 +380,10 @@ Use `agent-terminal` for TUI automation. Run `agent-terminal examples` or `agent
 Preferred shell lifecycle:
 1. `agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i` - Start a deterministic shell session.
 2. `agent-terminal wait -s shell "agent-terminal> "` - Wait for the prompt before sending input.
-3. `HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')` - Capture a baseline before the next visible change.
+3. `HASH=$(agent-terminal snapshot -s shell --format json | jq -r '.content_hash')` - Capture a baseline before the next visible change.
 4. `agent-terminal type -s shell "printf 'hello from agent-terminal\n'"` then `agent-terminal press -s shell Enter` - Trigger one command.
 5. `agent-terminal snapshot -s shell --await-change "$HASH" --settle 100` - Wait for the screen to change and stabilize.
-6. `agent-terminal snapshot -s shell --format text` - Read the updated terminal state.
+6. `agent-terminal snapshot -s shell --format json --render text` - Read the updated terminal state (minimal tokens).
 7. `agent-terminal kill -s shell` then `agent-terminal stop` - Clean up explicitly when done.
 
 Compatibility spellings remain available for existing scripts: `agent-terminal key ...`, `Ctrl+...`, `Alt+...`, short arrows like `Up`, and `agent-terminal wait-for ...`.
@@ -355,12 +397,12 @@ For AI-powered terminal apps that stream responses:
 ```bash
 agent-terminal spawn --name ai opencode
 agent-terminal wait -s ai "Ask anything" -t 15000
-HASH=$(agent-terminal snapshot -s ai | jq -r '.content_hash')
+HASH=$(agent-terminal snapshot -s ai --format json | jq -r '.content_hash')
 agent-terminal type -s ai "write a haiku about rust"
 agent-terminal press -s ai Enter
-agent-terminal snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000 --format text
+agent-terminal snapshot -s ai --await-change "$HASH" --settle 3000 -t 60000
 agent-terminal scroll -s ai up 10
-agent-terminal snapshot -s ai --format text
+agent-terminal snapshot -s ai --format json --render text
 agent-terminal kill -s ai
 ```
 
