@@ -132,7 +132,7 @@ fn missing_session_stderr_uses_agent_terminal_identity() {
     let sandbox = RuntimeSandbox::new();
     let missing_session = format!("missing-{}", unique_suffix());
 
-    let output = sandbox.run(&["snapshot", "-s", &missing_session, "--format", "text"]);
+    let output = sandbox.run(&["snapshot", "-s", &missing_session, "--format", "json"]);
 
     assert_failure_contains(
         &output,

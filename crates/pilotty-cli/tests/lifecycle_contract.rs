@@ -42,11 +42,11 @@ fn examples_command_teaches_one_canonical_shell_lifecycle() {
         "End-to-end example: Run one deterministic shell session",
         "agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --norc -i",
         "agent-terminal wait -s shell \"agent-terminal> \"",
-        "HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')",
+        "HASH=$(agent-terminal snapshot -s shell --format json | jq -r '.content_hash')",
         "agent-terminal type -s shell \"printf 'hello from agent-terminal\\n'\"",
         "agent-terminal press -s shell Enter",
         "agent-terminal snapshot -s shell --await-change \"$HASH\" --settle 100",
-        "agent-terminal snapshot -s shell --format text",
+        "agent-terminal snapshot -s shell --format json",
         "agent-terminal kill -s shell",
         "agent-terminal stop",
     ] {
