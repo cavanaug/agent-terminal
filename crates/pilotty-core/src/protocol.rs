@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
-use crate::format::RenderMode;
+use crate::format::RenderFeatures;
 use crate::snapshot::ScreenState;
 
 /// Default timeout for snapshot await_change/settle operations (30 seconds).
@@ -11,9 +11,9 @@ fn default_snapshot_timeout() -> u64 {
     30000
 }
 
-/// Default render mode for snapshots — full style + color data.
-fn default_render_mode() -> RenderMode {
-    RenderMode::Color
+/// Default render features for snapshots — all features enabled.
+fn default_render_features() -> RenderFeatures {
+    RenderFeatures::full()
 }
 
 /// Default TERM value for spawned processes.
@@ -69,10 +69,12 @@ pub enum Command {
         /// Timeout in ms for await_change/settle operations.
         #[serde(default = "default_snapshot_timeout")]
         timeout_ms: u64,
-        /// Override the session's render mode for this snapshot.
-        /// Defaults to Color (full style + color data).
-        #[serde(default = "default_render_mode")]
-        render_mode: RenderMode,
+        /// Controls which data is included in the snapshot output.
+        ///
+        /// Comma-separated features: `text`, `style`, `color`.
+        /// Default: all features enabled (`text,style,color`).
+        #[serde(default = "default_render_features")]
+        render_features: RenderFeatures,
     },
     /// Type text at cursor.
     Type {
@@ -80,12 +82,8 @@ pub enum Command {
         session: Option<String>,
     },
     /// Send a key, key combo, or key sequence.
-    ///
-    /// For sequences (space-separated keys like "Ctrl+X m"), `delay_ms` specifies
-    /// the delay between each key. Defaults to 0 (no delay). Maximum is 10000ms.
     Key {
         key: String,
-        /// Delay between keys in a sequence (milliseconds). Defaults to 0, max 10000.
         #[serde(default)]
         delay_ms: u32,
         session: Option<String>,
@@ -122,16 +120,22 @@ pub enum Command {
 }
 
 /// Snapshot output format.
+///
+/// Controls how snapshot data is encoded in the response.
+///
+/// | Format | Description | Best for |
+/// |--------|-------------|----------|
+/// | `ansi` | ANSI-escaped terminal text (default) | Human viewing in terminal |
+/// | `json` | Structured JSON with `rows` array | LLM/agent consumption |
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotFormat {
-    /// Full JSON with all metadata including text and elements.
+    /// ANSI-escaped text output (default). Renders with color/style in a terminal.
     #[default]
-    Full,
-    /// Compact format: omits text and elements, just metadata.
-    Compact,
-    /// Plain text only (no JSON structure).
-    Text,
+    Ansi,
+    /// Structured JSON with a `rows` array. Each row has text and optional style spans.
+    /// Designed for LLM/agent consumption — use `--render` to control token budget.
+    Json,
 }
 
 /// Scroll direction.
@@ -177,9 +181,9 @@ impl Response {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResponseData {
-    /// Full screen state snapshot.
+    /// JSON screen state snapshot (`--format json`).
     ScreenState(ScreenState),
-    /// Text-format snapshot.
+    /// ANSI text snapshot (`--format ansi`).
     Snapshot {
         format: SnapshotFormat,
         content: String,
@@ -212,12 +216,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn snapshot_defaults_render_mode_to_color_when_field_missing() {
+    fn snapshot_defaults_render_features_to_full_when_field_missing() {
         let command: Command = serde_json::from_str(
             r#"{
                 "action": "snapshot",
                 "session": "default",
-                "format": "full",
+                "format": "json",
                 "await_change": null,
                 "settle_ms": 0,
                 "timeout_ms": 30000
@@ -226,10 +230,38 @@ mod tests {
         .expect("snapshot command should deserialize");
 
         match command {
-            Command::Snapshot { render_mode, .. } => {
-                assert_eq!(render_mode, RenderMode::Color);
+            Command::Snapshot { render_features, .. } => {
+                assert_eq!(render_features, RenderFeatures::full());
             }
             other => panic!("expected snapshot command, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn snapshot_format_default_is_ansi() {
+        assert_eq!(SnapshotFormat::default(), SnapshotFormat::Ansi);
+    }
+
+    #[test]
+    fn snapshot_format_serde_roundtrip() {
+        let json = serde_json::to_string(&SnapshotFormat::Json).unwrap();
+        assert_eq!(json, "\"json\"");
+        let fmt: SnapshotFormat = serde_json::from_str("\"ansi\"").unwrap();
+        assert_eq!(fmt, SnapshotFormat::Ansi);
+    }
+
+    #[test]
+    fn render_features_serde_roundtrip_in_command() {
+        let cmd = Command::Snapshot {
+            session: None,
+            format: Some(SnapshotFormat::Json),
+            await_change: None,
+            settle_ms: 0,
+            timeout_ms: 30000,
+            render_features: RenderFeatures::text_and_color(),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let cmd2: Command = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, cmd2);
     }
 }
