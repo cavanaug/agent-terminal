@@ -103,9 +103,9 @@ impl RenderFeatures {
     }
 }
 
-// ── Legacy RenderMode (kept for protocol backward compat during transition) ──
+// ── Legacy RenderMode (kept for internal compatibility during transition) ──
 
-/// Render mode — kept for backward compat in protocol serialization.
+/// Legacy render mode retained for internal compatibility helpers.
 ///
 /// New code should use `RenderFeatures`. This enum maps 1:1:
 /// - `Basic`  → `RenderFeatures { text: true, style: false, color: false }`
