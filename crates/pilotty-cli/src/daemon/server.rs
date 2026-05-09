@@ -5,10 +5,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_terminal_core::error::ApiError;
-use agent_terminal_core::format::{render_ansi_lines, RenderMode};
+use agent_terminal_core::format::{render_ansi_lines, RenderFeatures};
 use agent_terminal_core::input::encode_mouse_click_combined;
 use agent_terminal_core::protocol::{Command, Request, Response, ResponseData, SnapshotFormat};
-use agent_terminal_core::snapshot::{CursorState, ScreenState, TerminalSize, TextLine};
+use agent_terminal_core::snapshot::{CursorState, ScreenState, TerminalSize};
 use anyhow::{Context, Result};
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
@@ -538,7 +538,7 @@ async fn handle_request(
             await_change,
             settle_ms,
             timeout_ms,
-            render_mode,
+            render_features,
         } => {
             handle_snapshot(
                 &request.id,
@@ -549,7 +549,7 @@ async fn handle_request(
                     await_change,
                     settle_ms,
                     timeout_ms,
-                    render_mode,
+                    render_features,
                 },
             )
             .await
@@ -694,7 +694,7 @@ struct SnapshotRequest {
     await_change: Option<u64>,
     settle_ms: u64,
     timeout_ms: u64,
-    render_mode: RenderMode,
+    render_features: RenderFeatures,
 }
 
 /// Handle snapshot command.
@@ -716,7 +716,7 @@ async fn handle_snapshot(
         await_change,
         settle_ms,
         timeout_ms,
-        render_mode,
+        render_features,
     } = request;
 
     // Resolve session first
@@ -725,8 +725,8 @@ async fn handle_snapshot(
         Err(e) => return Response::error(request_id, e),
     };
 
-    let format = format.unwrap_or(SnapshotFormat::Full);
-    let with_elements = matches!(format, SnapshotFormat::Full);
+    let format = format.unwrap_or(SnapshotFormat::Ansi);
+    let with_elements = matches!(format, SnapshotFormat::Json);
     let timeout = Duration::from_millis(timeout_ms);
     // Settle must be at least one poll interval to be meaningful
     let settle = Duration::from_millis(if settle_ms > 0 {
@@ -822,7 +822,7 @@ async fn handle_snapshot(
 
     // Phase 3: Take final snapshot with requested format
     let snapshot = match sessions
-        .get_snapshot_data_with_render_mode(&session_id, with_elements, render_mode)
+        .get_snapshot_data_with_features(&session_id, with_elements, render_features)
         .await
     {
         Ok(data) => data,
@@ -831,7 +831,7 @@ async fn handle_snapshot(
     let (cursor_row, cursor_col) = snapshot.cursor_pos;
 
     match format {
-        SnapshotFormat::Text => {
+        SnapshotFormat::Ansi => {
             let output = if let Some(ref clusters) = snapshot.clusters {
                 render_ansi_lines(
                     clusters,
@@ -839,7 +839,7 @@ async fn handle_snapshot(
                     cursor_col,
                     snapshot.size.rows,
                     snapshot.size.cols,
-                    render_mode,
+                    render_features,
                 )
             } else {
                 format_text_snapshot(
@@ -853,22 +853,13 @@ async fn handle_snapshot(
             Response::success(
                 request_id,
                 ResponseData::Snapshot {
-                    format: SnapshotFormat::Text,
+                    format: SnapshotFormat::Ansi,
                     content: output,
                 },
             )
         }
-        SnapshotFormat::Full => {
+        SnapshotFormat::Json => {
             let snapshot_id = sessions.next_snapshot_id();
-            let text_lines: Vec<TextLine> = snapshot
-                .text
-                .lines()
-                .enumerate()
-                .map(|(i, line)| TextLine {
-                    r: i as u16,
-                    t: line.trim_end().to_string(),
-                })
-                .collect();
             let screen_state = ScreenState {
                 snapshot_id,
                 size: TerminalSize {
@@ -881,31 +872,11 @@ async fn handle_snapshot(
                     col: cursor_col,
                     visible: snapshot.cursor_visible,
                 },
-                text: Some(text_lines),
+                rows: snapshot.rows,
                 elements: snapshot.elements,
                 content_hash: snapshot.content_hash,
-                style_map: snapshot.style_map,
-                color_map: snapshot.color_map,
-            };
-            Response::success(request_id, ResponseData::ScreenState(screen_state))
-        }
-        SnapshotFormat::Compact => {
-            let snapshot_id = sessions.next_snapshot_id();
-            let screen_state = ScreenState {
-                snapshot_id,
-                size: TerminalSize {
-                    cols: snapshot.size.cols,
-                    rows: snapshot.size.rows,
-                },
-                term: snapshot.term.clone(),
-                cursor: CursorState {
-                    row: cursor_row,
-                    col: cursor_col,
-                    visible: snapshot.cursor_visible,
-                },
+                // Legacy fields omitted in json format
                 text: None,
-                elements: None,
-                content_hash: None,
                 style_map: None,
                 color_map: None,
             };
@@ -1638,11 +1609,11 @@ mod tests {
             id: "snap-1".to_string(),
             command: Command::Snapshot {
                 session: Some("test-snap".to_string()),
-                format: Some(SnapshotFormat::Text),
+                format: Some(SnapshotFormat::Ansi),
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1663,7 +1634,7 @@ mod tests {
 
         // Verify the snapshot contains our text
         if let Some(ResponseData::Snapshot { format, content }) = snap_response.data {
-            assert_eq!(format, SnapshotFormat::Text);
+            assert_eq!(format, SnapshotFormat::Ansi);
             assert!(
                 content.contains("hello from test"),
                 "Snapshot should contain 'hello from test', got:\n{}",
@@ -1743,11 +1714,11 @@ mod tests {
             id: "snap-full".to_string(),
             command: Command::Snapshot {
                 session: Some("full-test".to_string()),
-                format: Some(SnapshotFormat::Full),
+                format: Some(SnapshotFormat::Json),
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -1787,16 +1758,16 @@ mod tests {
                 "Cursor col should be within bounds"
             );
 
-            // Check text is included in Full format
+            // Check rows is included in json format
             assert!(
-                screen_state.text.is_some(),
+                screen_state.rows.is_some(),
                 "Full format should include text"
             );
-            let text = screen_state.text.unwrap();
+            let rows = screen_state.rows.unwrap();
             assert!(
-                text.iter().any(|line| line.t.contains("full format test")),
+                rows.iter().any(|row| row.t.contains("full format test")),
                 "Text should contain output: {:?}",
-                text
+                rows.iter().map(|r| &r.t).collect::<Vec<_>>()
             );
         } else {
             panic!(
@@ -1895,11 +1866,11 @@ mod tests {
             id: "snap-1".to_string(),
             command: Command::Snapshot {
                 session: Some("type-test".to_string()),
-                format: Some(SnapshotFormat::Text),
+                format: Some(SnapshotFormat::Ansi),
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -2749,11 +2720,11 @@ mod tests {
             id: "snap-baseline".to_string(),
             command: Command::Snapshot {
                 session: Some("await-test".to_string()),
-                format: Some(SnapshotFormat::Full),
+                format: Some(SnapshotFormat::Json),
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -2804,11 +2775,11 @@ mod tests {
             id: "snap-await".to_string(),
             command: Command::Snapshot {
                 session: Some("await-test".to_string()),
-                format: Some(SnapshotFormat::Full),
+                format: Some(SnapshotFormat::Json),
                 await_change: Some(baseline_hash),
                 settle_ms: 50,
                 timeout_ms: 5000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let await_json = serde_json::to_string(&await_request).unwrap();
@@ -2847,9 +2818,9 @@ mod tests {
             // Verify content contains what we typed
             assert!(
                 state
-                    .text
+                    .rows
                     .as_ref()
-                    .is_some_and(|lines| lines.iter().any(|line| line.t.contains("hello"))),
+                    .is_some_and(|rows| rows.iter().any(|row| row.t.contains("hello"))),
                 "Text should contain 'hello'"
             );
         } else {
@@ -2997,11 +2968,11 @@ mod tests {
             id: "snap-elem".to_string(),
             command: Command::Snapshot {
                 session: Some("elem-test".to_string()),
-                format: Some(SnapshotFormat::Full),
+                format: Some(SnapshotFormat::Json),
                 await_change: None,
                 settle_ms: 0,
                 timeout_ms: 30000,
-                render_mode: RenderMode::Color,
+                render_features: RenderFeatures::full(),
             },
         };
         let snap_json = serde_json::to_string(&snap_request).unwrap();
@@ -3021,9 +2992,9 @@ mod tests {
 
         // Verify ScreenState with elements
         if let Some(ResponseData::ScreenState(screen_state)) = snap_response.data {
-            // Full format includes text
+            // Json format includes rows
             assert!(
-                screen_state.text.is_some(),
+                screen_state.rows.is_some(),
                 "Full format should include text"
             );
 
