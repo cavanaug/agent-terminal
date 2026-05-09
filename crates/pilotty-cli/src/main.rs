@@ -3,6 +3,8 @@
 mod args;
 mod daemon;
 
+use std::io::{self, Write};
+
 use agent_terminal_core::format::RenderFeatures;
 use agent_terminal_core::protocol::{
     Command, Request, ResponseData, ScrollDirection, SnapshotFormat,
@@ -160,7 +162,8 @@ fn run_client_command(cli: Cli) -> anyhow::Result<()> {
                         content,
                     } => {
                         // ANSI output: print directly so escape codes render in terminal
-                        println!("{}", content);
+                        print!("{}", content);
+                        io::stdout().flush()?;
                     }
                     _ => println!("{}", serde_json::to_string_pretty(&data)?),
                 }

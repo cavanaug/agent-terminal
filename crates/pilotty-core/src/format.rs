@@ -73,8 +73,8 @@ impl RenderFeatures {
 
     /// Parse from a comma-separated feature string (e.g. "text,style,color").
     ///
-    /// Valid tokens: `text`, `style`, `color`. Unknown tokens are ignored.
-    /// Returns an error string if no valid tokens were found.
+    /// Valid tokens: `text`, `style`, `color`.
+    /// Returns an error string for unknown tokens or if no valid tokens were found.
     pub fn parse(s: &str) -> Result<Self, String> {
         let mut features = Self { text: false, style: false, color: false };
         let mut any = false;
@@ -1024,9 +1024,7 @@ mod tests {
     #[test]
     fn sgr_color_only_features_no_attrs() {
         let style = CellStyle::new().with_bold(true).with_fg(Color::indexed(1));
-        let sgr = style_to_sgr(&style, RenderFeatures::text_and_color());
-        assert!(!sgr.contains("1m") || sgr.contains("31m"), "bold code should be absent");
-        assert!(sgr.contains("31m"), "fg color should be present");
+        assert_eq!(style_to_sgr(&style, RenderFeatures::text_and_color()), "\x1b[31m");
     }
 
     #[test]

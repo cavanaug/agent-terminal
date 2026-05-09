@@ -22,6 +22,14 @@ use agent_terminal_core::snapshot::{compute_content_hash, RowEntry};
 use crate::daemon::pty::{AsyncPtyHandle, PtySession, TermSize};
 use crate::daemon::terminal::TerminalEmulator;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SnapshotOptions {
+    pub with_elements: bool,
+    pub with_content_hash: bool,
+    pub with_rows: bool,
+    pub with_clusters: bool,
+}
+
 /// Unique identifier for a session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SessionId(pub String);
@@ -68,7 +76,7 @@ pub struct SnapshotData {
     /// Detected UI elements (computed on demand).
     pub elements: Option<Vec<Element>>,
     /// Hash of screen content for change detection.
-    /// Present when `with_elements=true`.
+    /// Present when `with_content_hash=true`.
     pub content_hash: Option<u64>,
     /// Row-based output for `--format json` (present when render_features requested).
     pub rows: Option<Vec<RowEntry>>,
@@ -404,19 +412,24 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
-        self.get_snapshot_data_with_features(id, with_elements, RenderFeatures::full())
-            .await
+        self.get_snapshot_data_with_options(
+            id,
+            SnapshotOptions {
+                with_elements,
+                with_content_hash: with_elements,
+                with_rows: true,
+                with_clusters: true,
+            },
+            RenderFeatures::full(),
+        )
+        .await
     }
 
-    /// Get snapshot data with render features controlling what style/color data is included.
-    ///
-    /// `features` is a set of flags (`text`, `style`, `color`) controlling which
-    /// data is computed and returned. Use a subset to minimize processing and token
-    /// output for LLM agents (e.g. `RenderFeatures::text_only()` for plain text).
-    pub async fn get_snapshot_data_with_features(
+    /// Get snapshot data with explicit output controls.
+    pub async fn get_snapshot_data_with_options(
         &self,
         id: &SessionId,
-        with_elements: bool,
+        options: SnapshotOptions,
         features: RenderFeatures,
     ) -> Result<SnapshotData, ApiError> {
         let sessions = self.sessions.read().await;
@@ -437,22 +450,28 @@ impl SessionManager {
         let size = session.size;
         let term = session.term.clone();
 
-        // Detect UI elements and compute content hash if requested
-        let (elements, content_hash) = if with_elements {
+        // Detect UI elements only when explicitly requested.
+        let elements = if options.with_elements {
             let (cursor_row, cursor_col) = cursor_pos;
             let ctx = ClassifyContext::new().with_cursor(cursor_row, cursor_col);
-            let elems = detect(&*terminal, &ctx);
-            let hash = compute_content_hash(&text);
-            (Some(elems), Some(hash))
+            Some(detect(&*terminal, &ctx))
         } else {
-            (None, None)
+            None
         };
 
-        // Build rows for json format (always built when any feature is active)
-        let rows = Some(build_rows(&*terminal, features));
+        let content_hash = if options.with_content_hash {
+            Some(compute_content_hash(&text))
+        } else {
+            None
+        };
 
-        // Build clusters for ANSI rendering when style or color is requested
-        let clusters = if features.style || features.color {
+        let rows = if options.with_rows {
+            Some(build_rows(&*terminal, features))
+        } else {
+            None
+        };
+
+        let clusters = if options.with_clusters {
             Some(segment_grid(&*terminal))
         } else {
             None

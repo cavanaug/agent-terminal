@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "agent-terminal-cli"
-version = "0.1.20260417"
+version = "0.2.20260508"
 dependencies = [
  "agent-terminal-core",
  "anyhow",
@@ -27,7 +27,7 @@ dependencies = [
 
 [[package]]
 name = "agent-terminal-core"
-version = "0.1.20260417"
+version = "0.2.20260508"
 dependencies = [
  "serde",
  "serde_json",

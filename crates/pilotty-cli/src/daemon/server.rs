@@ -18,7 +18,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::daemon::paths;
 use crate::daemon::pty::TermSize;
-use crate::daemon::session::{SessionId, SessionManager};
+use crate::daemon::session::{SessionId, SessionManager, SnapshotOptions};
 
 /// Maximum number of concurrent client connections to prevent resource exhaustion.
 const MAX_CONNECTIONS: usize = 100;
@@ -727,6 +727,17 @@ async fn handle_snapshot(
 
     let format = format.unwrap_or(SnapshotFormat::Ansi);
     let with_elements = matches!(format, SnapshotFormat::Json);
+    let needs_hash = await_change.is_some() || settle_ms > 0 || matches!(format, SnapshotFormat::Json);
+    let final_snapshot_options = SnapshotOptions {
+        with_elements,
+        with_content_hash: needs_hash,
+        with_rows: matches!(format, SnapshotFormat::Json),
+        with_clusters: matches!(format, SnapshotFormat::Ansi) && (render_features.style || render_features.color),
+    };
+    let poll_snapshot_options = SnapshotOptions {
+        with_content_hash: true,
+        ..SnapshotOptions::default()
+    };
     let timeout = Duration::from_millis(timeout_ms);
     // Settle must be at least one poll interval to be meaningful
     let settle = Duration::from_millis(if settle_ms > 0 {
@@ -754,7 +765,10 @@ async fn handle_snapshot(
                 );
             }
 
-            let snapshot = match sessions.get_snapshot_data(&session_id, false).await {
+            let snapshot = match sessions
+                .get_snapshot_data_with_options(&session_id, poll_snapshot_options, RenderFeatures::text_only())
+                .await
+            {
                 Ok(data) => data,
                 Err(e) => return Response::error(request_id, e),
             };
@@ -776,7 +790,10 @@ async fn handle_snapshot(
     // Phase 2: If settle_ms > 0, wait for screen stability
     if settle_ms > 0 {
         // Get fresh snapshot - don't rely on potentially stale hash from Phase 1
-        let snapshot = match sessions.get_snapshot_data(&session_id, false).await {
+        let snapshot = match sessions
+            .get_snapshot_data_with_options(&session_id, poll_snapshot_options, RenderFeatures::text_only())
+            .await
+        {
             Ok(data) => data,
             Err(e) => return Response::error(request_id, e),
         };
@@ -799,7 +816,10 @@ async fn handle_snapshot(
                 );
             }
 
-            let snapshot = match sessions.get_snapshot_data(&session_id, false).await {
+            let snapshot = match sessions
+                .get_snapshot_data_with_options(&session_id, poll_snapshot_options, RenderFeatures::text_only())
+                .await
+            {
                 Ok(data) => data,
                 Err(e) => return Response::error(request_id, e),
             };
@@ -822,7 +842,7 @@ async fn handle_snapshot(
 
     // Phase 3: Take final snapshot with requested format
     let snapshot = match sessions
-        .get_snapshot_data_with_features(&session_id, with_elements, render_features)
+        .get_snapshot_data_with_options(&session_id, final_snapshot_options, render_features)
         .await
     {
         Ok(data) => data,
@@ -2825,6 +2845,137 @@ mod tests {
             );
         } else {
             panic!("Expected ScreenState response");
+        }
+
+        server_handle.abort();
+        let _ = std::fs::remove_file(&socket_path);
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_await_change_times_out_without_change() {
+        let temp_dir = std::env::temp_dir();
+        let socket_path = temp_dir.join(format!(
+            "agent-terminal-await-timeout-{}.sock",
+            std::process::id()
+        ));
+        let pid_path = socket_path.with_extension("pid");
+
+        let server = DaemonServer::bind_to(socket_path.clone(), pid_path.clone())
+            .await
+            .expect("Failed to bind server");
+
+        let server_handle = tokio::spawn(async move {
+            let _ = timeout(Duration::from_secs(10), server.run()).await;
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let stream = UnixStream::connect(&socket_path)
+            .await
+            .expect("Failed to connect");
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+
+        let spawn_request = Request {
+            id: "spawn-await-timeout".to_string(),
+            command: Command::Spawn {
+                command: vec!["cat".to_string()],
+                session_name: Some("await-timeout-test".to_string()),
+                cwd: None,
+                term: "xterm-256color".into(),
+                colorterm: None,
+                cols: None,
+                rows: None,
+            },
+        };
+        let request_json = serde_json::to_string(&spawn_request).unwrap();
+        writer
+            .write_all(request_json.as_bytes())
+            .await
+            .expect("write");
+        writer.write_all(b"\n").await.expect("newline");
+        writer.flush().await.expect("flush");
+
+        let mut response_line = String::new();
+        timeout(Duration::from_secs(2), reader.read_line(&mut response_line))
+            .await
+            .expect("timeout")
+            .expect("read");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let baseline_request = Request {
+            id: "snap-await-timeout-baseline".to_string(),
+            command: Command::Snapshot {
+                session: Some("await-timeout-test".to_string()),
+                format: Some(SnapshotFormat::Json),
+                await_change: None,
+                settle_ms: 0,
+                timeout_ms: 30000,
+                render_features: RenderFeatures::full(),
+            },
+        };
+        let baseline_json = serde_json::to_string(&baseline_request).unwrap();
+        writer
+            .write_all(baseline_json.as_bytes())
+            .await
+            .expect("write");
+        writer.write_all(b"\n").await.expect("newline");
+        writer.flush().await.expect("flush");
+
+        response_line.clear();
+        timeout(Duration::from_secs(2), reader.read_line(&mut response_line))
+            .await
+            .expect("timeout")
+            .expect("read");
+
+        let baseline_response: Response =
+            serde_json::from_str(&response_line).expect("parse baseline response");
+        let baseline_hash = match baseline_response.data {
+            Some(ResponseData::ScreenState(state)) => state.content_hash.expect("should have hash"),
+            _ => panic!("Expected ScreenState"),
+        };
+
+        let await_request = Request {
+            id: "snap-await-timeout".to_string(),
+            command: Command::Snapshot {
+                session: Some("await-timeout-test".to_string()),
+                format: Some(SnapshotFormat::Json),
+                await_change: Some(baseline_hash),
+                settle_ms: 0,
+                timeout_ms: 200,
+                render_features: RenderFeatures::full(),
+            },
+        };
+        let await_json = serde_json::to_string(&await_request).unwrap();
+        writer
+            .write_all(await_json.as_bytes())
+            .await
+            .expect("write");
+        writer.write_all(b"\n").await.expect("newline");
+        writer.flush().await.expect("flush");
+
+        response_line.clear();
+        timeout(Duration::from_secs(2), reader.read_line(&mut response_line))
+            .await
+            .expect("timeout")
+            .expect("read");
+
+        let await_response: Response =
+            serde_json::from_str(&response_line).expect("parse await response");
+        assert!(
+            !await_response.success,
+            "Await snapshot should time out when the screen does not change"
+        );
+
+        if let Some(err) = &await_response.error {
+            assert!(
+                err.message.contains("waiting for screen to change"),
+                "error should explain the wait timeout, got: {}",
+                err.message
+            );
+        } else {
+            panic!("Expected timeout error response");
         }
 
         server_handle.abort();
