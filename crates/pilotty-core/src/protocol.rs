@@ -71,8 +71,10 @@ pub enum Command {
         timeout_ms: u64,
         /// Controls which data is included in the snapshot output.
         ///
-        /// Comma-separated features: `text`, `style`, `color`.
-        /// Default: all features enabled (`text,style,color`).
+        /// Serialized as a `RenderFeatures` object with boolean flags for
+        /// `text`, `style`, and `color`, for example
+        /// `{ "text": true, "style": true, "color": false }`.
+        /// Default: all features enabled.
         #[serde(default = "default_render_features")]
         render_features: RenderFeatures,
     },
