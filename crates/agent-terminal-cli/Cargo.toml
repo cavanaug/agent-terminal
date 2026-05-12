@@ -10,7 +10,7 @@ name = "agent-terminal"
 path = "src/main.rs"
 
 [dependencies]
-agent-terminal-core = { path = "../pilotty-core" }
+agent-terminal-core = { path = "../agent-terminal-core" }
 
 tokio = { workspace = true }
 clap = { workspace = true }
