@@ -3,7 +3,9 @@
 mod args;
 mod daemon;
 
-use agent_terminal_core::format::RenderMode;
+use std::io::{self, Write};
+
+use agent_terminal_core::format::RenderFeatures;
 use agent_terminal_core::protocol::{
     Command, Request, ResponseData, ScrollDirection, SnapshotFormat,
 };
@@ -42,8 +44,8 @@ fn main() {
 /// Convert CLI args to a protocol Command.
 ///
 /// Returns None for commands that don't require daemon communication.
-fn cli_to_command(cli: &Cli) -> Option<Command> {
-    match &cli.command {
+fn cli_to_command(cli: &Cli) -> anyhow::Result<Option<Command>> {
+    let cmd = match &cli.command {
         Commands::Spawn(args) => Some(Command::Spawn {
             command: args.command.clone(),
             session_name: args.name.clone(),
@@ -60,22 +62,21 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
         Commands::Kill(args) => Some(Command::Kill {
             session: args.session.clone(),
         }),
-        Commands::Snapshot(args) => Some(Command::Snapshot {
-            session: args.session.clone(),
-            format: Some(match args.format {
-                crate::args::SnapshotFormat::Full => SnapshotFormat::Full,
-                crate::args::SnapshotFormat::Compact => SnapshotFormat::Compact,
-                crate::args::SnapshotFormat::Text => SnapshotFormat::Text,
-            }),
-            await_change: args.await_change,
-            settle_ms: args.settle,
-            timeout_ms: args.timeout,
-            render_mode: match args.render_mode {
-                crate::args::CliRenderMode::Basic => RenderMode::Basic,
-                crate::args::CliRenderMode::Styled => RenderMode::Styled,
-                crate::args::CliRenderMode::Color => RenderMode::Color,
-            },
-        }),
+        Commands::Snapshot(args) => {
+            let render_features = RenderFeatures::parse(&args.render)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            Some(Command::Snapshot {
+                session: args.session.clone(),
+                format: Some(match args.format {
+                    crate::args::SnapshotFormat::Ansi => SnapshotFormat::Ansi,
+                    crate::args::SnapshotFormat::Json => SnapshotFormat::Json,
+                }),
+                await_change: args.await_change,
+                settle_ms: args.settle,
+                timeout_ms: args.timeout,
+                render_features,
+            })
+        }
         Commands::Type(args) => Some(Command::Type {
             text: args.text.clone(),
             session: args.session.clone(),
@@ -114,13 +115,14 @@ fn cli_to_command(cli: &Cli) -> Option<Command> {
         Commands::Examples => None,
         Commands::Completions(_) => None,
         Commands::Stop => Some(Command::Shutdown),
-    }
+    };
+    Ok(cmd)
 }
 
 /// Run a client command by connecting to the daemon.
 fn run_client_command(cli: Cli) -> anyhow::Result<()> {
     // Handle commands that don't need daemon communication
-    let Some(command) = cli_to_command(&cli) else {
+    let Some(command) = cli_to_command(&cli)? else {
         // Commands that don't need daemon communication
         if let Commands::Examples = cli.command {
             println!("{}", crate::args::EXAMPLES_TEXT);
@@ -156,10 +158,12 @@ fn run_client_command(cli: Cli) -> anyhow::Result<()> {
             if let Some(data) = response.data {
                 match data {
                     ResponseData::Snapshot {
-                        format: SnapshotFormat::Text,
+                        format: SnapshotFormat::Ansi,
                         content,
                     } => {
-                        println!("{}", content);
+                        // ANSI output: print directly so escape codes render in terminal
+                        print!("{}", content);
+                        io::stdout().flush()?;
                     }
                     _ => println!("{}", serde_json::to_string_pretty(&data)?),
                 }
@@ -174,9 +178,6 @@ fn run_client_command(cli: Cli) -> anyhow::Result<()> {
 }
 
 /// Run the daemon server with graceful signal handling.
-///
-/// Handles SIGINT (Ctrl+C) and SIGTERM for clean shutdown.
-/// The DaemonServer's Drop impl cleans up socket and PID files.
 fn run_daemon() {
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -195,7 +196,6 @@ fn run_daemon() {
             }
         };
 
-        // Run server with signal handling
         tokio::select! {
             result = server.run() => {
                 if let Err(e) = result {
@@ -210,14 +210,9 @@ fn run_daemon() {
                 info!("Received SIGTERM, shutting down gracefully");
             }
         }
-        // Server is dropped here, triggering cleanup of socket and PID files
     });
 }
 
-/// Wait for SIGTERM signal (Unix only).
-///
-/// If signal registration fails, logs a warning and waits indefinitely.
-/// This graceful fallback prevents panics during daemon startup.
 #[cfg(unix)]
 async fn sigterm() {
     use tokio::signal::unix::{signal, SignalKind};
@@ -235,7 +230,6 @@ async fn sigterm() {
     }
 }
 
-/// SIGTERM is not available on non-Unix platforms; use a never-completing future.
 #[cfg(not(unix))]
 async fn sigterm() {
     std::future::pending::<()>().await;

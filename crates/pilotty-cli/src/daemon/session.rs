@@ -14,13 +14,21 @@ use agent_terminal_core::elements::segment::Cluster;
 use agent_terminal_core::elements::Element;
 use agent_terminal_core::error::ApiError;
 use agent_terminal_core::format::{
-    build_color_map, build_style_map, segment_grid, ColorMapEntry, RenderMode, StyleMapEntry,
+    build_rows, segment_grid, RenderFeatures,
 };
 use agent_terminal_core::protocol::SessionInfo;
-use agent_terminal_core::snapshot::compute_content_hash;
+use agent_terminal_core::snapshot::{compute_content_hash, RowEntry};
 
 use crate::daemon::pty::{AsyncPtyHandle, PtySession, TermSize};
 use crate::daemon::terminal::TerminalEmulator;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SnapshotOptions {
+    pub with_elements: bool,
+    pub with_content_hash: bool,
+    pub with_rows: bool,
+    pub with_clusters: bool,
+}
 
 /// Unique identifier for a session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -68,13 +76,11 @@ pub struct SnapshotData {
     /// Detected UI elements (computed on demand).
     pub elements: Option<Vec<Element>>,
     /// Hash of screen content for change detection.
-    /// Present when `with_elements=true`.
+    /// Present when `with_content_hash=true`.
     pub content_hash: Option<u64>,
-    /// Position-based style attribute map (tier-filtered).
-    pub style_map: Option<Vec<StyleMapEntry>>,
-    /// Position-based color attribute map (tier-filtered).
-    pub color_map: Option<Vec<ColorMapEntry>>,
-    /// Cluster-based segments for ANSI rendering (present when render_mode allows style).
+    /// Row-based output for `--format json` (present when render_features requested).
+    pub rows: Option<Vec<RowEntry>>,
+    /// Cluster-based segments for ANSI rendering (present when style/color requested).
     pub clusters: Option<Vec<Cluster>>,
 }
 
@@ -392,7 +398,7 @@ impl SessionManager {
         }
     }
 
-    /// Get snapshot data for a session.
+    /// Get snapshot data for a session with all features enabled (default).
     ///
     /// Drains pending PTY output to terminal emulator before capturing snapshot.
     ///
@@ -406,16 +412,25 @@ impl SessionManager {
         id: &SessionId,
         with_elements: bool,
     ) -> Result<SnapshotData, ApiError> {
-        self.get_snapshot_data_with_render_mode(id, with_elements, RenderMode::Color)
-            .await
+        self.get_snapshot_data_with_options(
+            id,
+            SnapshotOptions {
+                with_elements,
+                with_content_hash: with_elements,
+                with_rows: true,
+                with_clusters: true,
+            },
+            RenderFeatures::full(),
+        )
+        .await
     }
 
-    /// Get snapshot data with a render_mode filter controlling what style/color data is included.
-    pub async fn get_snapshot_data_with_render_mode(
+    /// Get snapshot data with explicit output controls.
+    pub async fn get_snapshot_data_with_options(
         &self,
         id: &SessionId,
-        with_elements: bool,
-        render_mode: RenderMode,
+        options: SnapshotOptions,
+        features: RenderFeatures,
     ) -> Result<SnapshotData, ApiError> {
         let sessions = self.sessions.read().await;
         let session = sessions
@@ -435,32 +450,28 @@ impl SessionManager {
         let size = session.size;
         let term = session.term.clone();
 
-        // Detect UI elements and compute content hash if requested
-        let (elements, content_hash) = if with_elements {
+        // Detect UI elements only when explicitly requested.
+        let elements = if options.with_elements {
             let (cursor_row, cursor_col) = cursor_pos;
             let ctx = ClassifyContext::new().with_cursor(cursor_row, cursor_col);
-            let elems = detect(&*terminal, &ctx);
-            let hash = compute_content_hash(&text);
-            (Some(elems), Some(hash))
-        } else {
-            (None, None)
-        };
-
-        // Build style_map and color_map based on render mode
-        let style_map = if render_mode.allows_style() {
-            Some(build_style_map(&*terminal))
+            Some(detect(&*terminal, &ctx))
         } else {
             None
         };
 
-        let color_map = if render_mode.allows_color() {
-            Some(build_color_map(&*terminal))
+        let content_hash = if options.with_content_hash {
+            Some(compute_content_hash(&text))
         } else {
             None
         };
 
-        // Build clusters for ANSI rendering when style is requested
-        let clusters = if render_mode.allows_style() {
+        let rows = if options.with_rows {
+            Some(build_rows(&*terminal, features))
+        } else {
+            None
+        };
+
+        let clusters = if options.with_clusters {
             Some(segment_grid(&*terminal))
         } else {
             None
@@ -474,8 +485,7 @@ impl SessionManager {
             term,
             elements,
             content_hash,
-            style_map,
-            color_map,
+            rows,
             clusters,
         })
     }
@@ -1026,12 +1036,12 @@ mod tests {
             .expect("Failed to get snapshot");
 
         assert!(
-            snapshot.style_map.is_some(),
-            "default snapshot should include style_map"
+            snapshot.rows.is_some(),
+            "default snapshot should include rows"
         );
         assert!(
-            snapshot.color_map.is_some(),
-            "default snapshot should include color_map"
+            snapshot.clusters.is_some(),
+            "default snapshot should include clusters for ANSI rendering"
         );
 
         manager

@@ -33,17 +33,37 @@ Examples:
 
     /// Get a snapshot of the terminal screen
     #[command(after_help = "\
+Output format (--format):
+  ansi  ANSI-escaped text with color/style — renders in terminal (default)
+  json  Structured JSON with 'rows' array — designed for LLM/agent consumption
+
+Render features (--render):
+  Comma-separated list of: text, style, color (default: text,style,color)
+  text   Plain text content (always included)
+  style  Text attributes: bold, italic, dim, underline, inverse
+  color  Foreground and background colors
+
+Token budget examples for LLM/agent use:
+  --render text              Plain text only (minimum tokens)
+  --render text,color        Text + colors, no bold/italic info
+  --render text,style,color  Full data (default)
+
 Examples:
-  agent-terminal snapshot                      # Snapshot default session (full JSON)
-  agent-terminal snapshot --format compact     # JSON without text field
-  agent-terminal snapshot --format text        # Plain text with cursor indicator
-  agent-terminal snapshot -s editor            # Snapshot a specific session
+  agent-terminal snapshot                              # ANSI output (default)
+  agent-terminal snapshot --format json               # JSON rows for agent consumption
+  agent-terminal snapshot --format json --render text # Minimal tokens: text only
+  agent-terminal snapshot -s editor                   # Snapshot a specific session
 
 Wait for change:
-  HASH=$(agent-terminal snapshot | jq -r '.content_hash')
+  HASH=$(agent-terminal snapshot --format json | jq -r '.content_hash')
   agent-terminal press Enter
   agent-terminal snapshot --await-change $HASH           # Block until screen changes
-  agent-terminal snapshot --await-change $HASH --settle 100  # Wait for 100ms stability")]
+  agent-terminal snapshot --await-change $HASH --settle 100  # Wait for 100ms stability
+
+JQ examples (--format json):
+  agent-terminal snapshot --format json | jq '.rows[] | select(.r == 5)'
+  agent-terminal snapshot --format json | jq '.rows[] | select(.t | contains(\"error\"))'
+  agent-terminal snapshot --format json | jq '[.rows[].t]'  # All row text as array")]
     Snapshot(SnapshotArgs),
 
     /// Type text at the current cursor position
@@ -252,16 +272,19 @@ pub struct KillArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct SnapshotArgs {
-    /// Output format
-    #[arg(short, long, value_enum, default_value_t = SnapshotFormat::Full)]
+    /// Output format: 'ansi' for terminal display, 'json' for LLM/agent consumption
+    #[arg(short, long, value_enum, default_value_t = SnapshotFormat::Ansi)]
     pub format: SnapshotFormat,
 
     #[arg(short, long, help = SESSION_HELP)]
     pub session: Option<String>,
 
-    /// Render mode for this snapshot: basic (text only), styled (text attributes), color (full color) [default: color]
-    #[arg(long = "render", value_enum, default_value_t = CliRenderMode::Color)]
-    pub render_mode: CliRenderMode,
+    /// Features to include in output (comma-separated: text, style, color)
+    ///
+    /// Controls what data is included — use a subset to reduce token usage for LLM agents.
+    /// Examples: 'text' (plain text only), 'text,color' (text + colors), 'text,style,color' (all)
+    #[arg(long = "render", default_value = "text,style,color", value_name = "FEATURES")]
+    pub render: String,
 
     /// Block until content_hash differs from this value
     #[arg(long, value_name = "HASH")]
@@ -278,23 +301,10 @@ pub struct SnapshotArgs {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SnapshotFormat {
-    /// Full JSON with all metadata
-    Full,
-    /// Compact format with inline refs
-    Compact,
-    /// Plain text only
-    Text,
-}
-
-/// Render mode for CLI (maps to protocol RenderMode).
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum CliRenderMode {
-    /// No style data — text only
-    Basic,
-    /// Text attributes (bold, italic, dim, underline, inverse) via style_map
-    Styled,
-    /// Full style + color data via style_map + color_map
-    Color,
+    /// ANSI-escaped text output — renders with color/style in a terminal (default)
+    Ansi,
+    /// Structured JSON with a 'rows' array — designed for LLM/agent consumption
+    Json,
 }
 
 #[derive(Debug, clap::Args)]
@@ -400,17 +410,21 @@ agent-terminal spawn --name shell env PS1='agent-terminal> ' bash --noprofile --
 agent-terminal wait -s shell "agent-terminal> "
 
 # 3. Capture a baseline hash before triggering visible output
-HASH=$(agent-terminal snapshot -s shell | jq -r '.content_hash')
+HASH=$(agent-terminal snapshot -s shell --format json | jq -r '.content_hash')
 
 # 4. Type a command, then press Enter to run it
 agent-terminal type -s shell "printf 'hello from agent-terminal\n'"
 agent-terminal press -s shell Enter
 
-# 5. Wait for the screen to change and settle, then read terminal state again
+# 5. Wait for the screen to change and settle, then read terminal state
 agent-terminal snapshot -s shell --await-change "$HASH" --settle 100
-agent-terminal snapshot -s shell --format text
+agent-terminal snapshot -s shell --format json            # Full JSON for agent
+agent-terminal snapshot -s shell                          # ANSI for human viewing
 
-# 6. Clean up the session and stop the daemon when you are done
+# 6. Minimal-token snapshot (text only, no color/style) for LLM agents
+agent-terminal snapshot -s shell --format json --render text
+
+# 7. Clean up the session and stop the daemon when you are done
 agent-terminal kill -s shell
 agent-terminal stop
 
@@ -422,7 +436,7 @@ For advanced terminal-state synchronization, prefer agent-terminal snapshot --aw
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, CliRenderMode, Commands, EXAMPLES_TEXT};
+    use super::{Cli, Commands, EXAMPLES_TEXT};
     use clap::{CommandFactory, Parser};
 
     #[test]
@@ -438,12 +452,60 @@ mod tests {
     }
 
     #[test]
-    fn test_snapshot_defaults_to_color_render_mode() {
+    fn test_snapshot_defaults_to_ansi_format() {
         let cli = Cli::parse_from(["agent-terminal", "snapshot"]);
 
         match cli.command {
             Commands::Snapshot(args) => {
-                assert!(matches!(args.render_mode, CliRenderMode::Color));
+                assert!(matches!(args.format, super::SnapshotFormat::Ansi));
+            }
+            _ => panic!("Expected snapshot command"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_json_format() {
+        let cli = Cli::parse_from(["agent-terminal", "snapshot", "--format", "json"]);
+
+        match cli.command {
+            Commands::Snapshot(args) => {
+                assert!(matches!(args.format, super::SnapshotFormat::Json));
+            }
+            _ => panic!("Expected snapshot command"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_default_render_is_full() {
+        let cli = Cli::parse_from(["agent-terminal", "snapshot"]);
+
+        match cli.command {
+            Commands::Snapshot(args) => {
+                assert_eq!(args.render, "text,style,color");
+            }
+            _ => panic!("Expected snapshot command"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_render_text_only() {
+        let cli = Cli::parse_from(["agent-terminal", "snapshot", "--render", "text"]);
+
+        match cli.command {
+            Commands::Snapshot(args) => {
+                assert_eq!(args.render, "text");
+            }
+            _ => panic!("Expected snapshot command"),
+        }
+    }
+
+    #[test]
+    fn test_snapshot_render_text_and_color() {
+        let cli = Cli::parse_from(["agent-terminal", "snapshot", "--render", "text,color"]);
+
+        match cli.command {
+            Commands::Snapshot(args) => {
+                assert_eq!(args.render, "text,color");
             }
             _ => panic!("Expected snapshot command"),
         }
